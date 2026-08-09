@@ -119,6 +119,7 @@ Authors
 -------
 
 * Akretion
+* KMEE
 
 Contributors
 ------------
@@ -126,6 +127,10 @@ Contributors
 - `AKRETION <https://akretion.com/pt-BR/>`__:
 
   - Raphaël Valyi <raphael.valyi@akretion.com.br>
+
+- `KMEE <https://www.kmee.com.br>`__:
+
+  - Luis Felipe Mileo <mileo@kmee.com.br>
 
 Maintainers
 -----------
