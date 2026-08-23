@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2024 Marcel Savegnago - Escodoo (https://www.escodoo.com.br)
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+
+     Migrado da 16 para a 18: o modelo `ir.property` foi removido no Odoo 17.
+     Campo com `company_dependent=True` continua existindo — o que mudou é onde
+     o valor mora: saiu de uma tabela de propriedades e virou coluna jsonb no
+     próprio registro. Escrever o campo direto, no contexto da empresa, é o
+     equivalente exato do que estas duas propriedades faziam.
+-->
+<odoo noupdate="1">
+    <function model="l10n_br_fiscal.tax.group" name="write">
+        <value
+            eval="[
+                ref('l10n_br_fiscal.tax_group_pis_wh'),
+                ref('l10n_br_fiscal.tax_group_cofins_wh'),
+            ]"
+        />
+        <value eval="{'generate_wh_invoice': True}" />
+        <function
+            eval="[{'allowed_company_ids': [ref('l10n_br_base.empresa_lucro_presumido')]}]"
+            name="with_context"
+        />
+    </function>
+</odoo>
