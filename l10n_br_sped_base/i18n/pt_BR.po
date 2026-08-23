@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0+e\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-23 20:49+0000\n"
-"PO-Revision-Date: 2026-08-23 20:49+0000\n"
+"POT-Creation-Date: 2026-08-23 22:16+0000\n"
+"PO-Revision-Date: 2026-08-23 22:16+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -23,7 +23,7 @@ msgstr "Requer ação"
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__activity_ids
 msgid "Activities"
-msgstr ""
+msgstr "Atividades"
 
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__activity_exception_decoration
@@ -119,7 +119,7 @@ msgstr "Participante do documento fiscal"
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__fiscal_operation_ids
 msgid "Fiscal Operation"
-msgstr ""
+msgstr "Operação fiscal"
 
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__fiscal_product_ids
@@ -129,6 +129,12 @@ msgstr "Produto fiscal"
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__fiscal_uom_ids
 msgid "Fiscal Uom"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Flush Registers"
 msgstr ""
 
 #. module: l10n_br_sped_base
@@ -151,6 +157,12 @@ msgstr "Seguidores (parceiros)"
 #: model:ir.model.fields,help:l10n_br_sped_base.field_l10n_br_sped_declaration__activity_type_icon
 msgid "Font awesome icon e.g. fa-tasks"
 msgstr "Ícone do Font Awesome. Ex.: fa-tasks"
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Generate SPED File"
+msgstr ""
 
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__has_message
@@ -298,13 +310,19 @@ msgstr "Referência no Odoo"
 #. module: l10n_br_sped_base
 #. odoo-python
 #: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Pull Registers from Odoo"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
 msgid "Pulled from Odoo"
 msgstr ""
 
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__rating_ids
 msgid "Ratings"
-msgstr ""
+msgstr "Avaliações"
 
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__res_id
@@ -316,6 +334,12 @@ msgstr "ID do registro"
 #. odoo-python
 #: code:addons/l10n_br_sped_base/models/sped_mixin.py:0
 msgid "Register %(code)s doesn't match Odoo %(kind)s SPED structure!"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Reset to Draft"
 msgstr ""
 
 #. module: l10n_br_sped_base
@@ -331,6 +355,12 @@ msgstr "Erro no envio de SMS"
 #. module: l10n_br_sped_base
 #: model:ir.ui.menu,name:l10n_br_sped_base.menu_root
 msgid "SPED"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Set to Done"
 msgstr ""
 
 #. module: l10n_br_sped_base
@@ -400,3 +430,33 @@ msgstr "Histórico de comunicação do site"
 #: model:ir.model,name:l10n_br_sped_base.model_l10n_br_sped_mixin
 msgid "base class for all registers"
 msgstr "classe base de todos os registros"
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Pull Registers from Odoo"
+msgstr "Trazer registros do Odoo"
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Flush Registers"
+msgstr "Limpar registros"
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Set to Done"
+msgstr "Concluir"
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Reset to Draft"
+msgstr "Voltar para rascunho"
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Generate SPED File"
+msgstr "Gerar arquivo do SPED"

@@ -4,8 +4,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Odoo Server 16.0\n"
+"Project-Id-Version: Odoo Server 18.0+e\n"
 "Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-23 21:39+0000\n"
+"PO-Revision-Date: 2026-08-23 21:39+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -50,12 +52,6 @@ msgstr ""
 #: model:ir.actions.act_window,name:l10n_br_sped_ecd.ecd_0150_action
 #: model:ir.ui.menu,name:l10n_br_sped_ecd.ecd_0150
 msgid "0150 TABELA DE CADASTRO DO PARTICIPANTE"
-msgstr ""
-
-#. module: l10n_br_sped_ecd
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0150__reg_0180_ids
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_9_0150__reg_0180_ids
-msgid "0180"
 msgstr ""
 
 #. module: l10n_br_sped_ecd
@@ -2314,7 +2310,9 @@ msgstr ""
 
 #. module: l10n_br_sped_ecd
 #: model:ir.model.fields,help:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0000__message_has_error
+#: model:ir.model.fields,help:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0000__message_has_sms_error
 #: model:ir.model.fields,help:l10n_br_sped_ecd.field_l10n_br_sped_ecd_9_0000__message_has_error
+#: model:ir.model.fields,help:l10n_br_sped_ecd.field_l10n_br_sped_ecd_9_0000__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
 msgstr ""
 
@@ -3265,60 +3263,6 @@ msgid "Largura da coluna no relatório (em quantidade de caracteres)."
 msgstr ""
 
 #. module: l10n_br_sped_ecd
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0000____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0007____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0020____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0035____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0150____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0180____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i010____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i012____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i015____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i020____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i030____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i050____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i051____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i052____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i053____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i075____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i150____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i155____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i157____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i200____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i250____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i300____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i310____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i350____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i355____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i500____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i510____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i550____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_i555____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j005____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j150____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j210____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j215____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j800____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j801____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j900____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j930____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j932____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_j935____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k030____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k110____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k115____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k200____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k210____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k300____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k310____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_k315____last_update
-msgid "Last Modified on"
-msgstr ""
-
-#. module: l10n_br_sped_ecd
 #: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0000__write_uid
 #: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0007__write_uid
 #: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0020__write_uid
@@ -3434,12 +3378,6 @@ msgstr ""
 #. module: l10n_br_sped_ecd
 #: model:ir.model,name:l10n_br_sped_ecd.model_l10n_br_sped_ecd_k210
 msgid "MAPEAMENTO PARA O PLANO DE CONTAS DAS EMPRESAS CONSOLIDADAS."
-msgstr ""
-
-#. module: l10n_br_sped_ecd
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0000__message_main_attachment_id
-#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_9_0000__message_main_attachment_id
-msgid "Main Attachment"
 msgstr ""
 
 #. module: l10n_br_sped_ecd
@@ -4499,6 +4437,12 @@ msgid "RELAÇÃO DOS EVENTOS SOCIETÁRIOS."
 msgstr ""
 
 #. module: l10n_br_sped_ecd
+#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0000__rating_ids
+#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_9_0000__rating_ids
+msgid "Ratings"
+msgstr ""
+
+#. module: l10n_br_sped_ecd
 #: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0000__res_id
 #: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0007__res_id
 #: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0020__res_id
@@ -4720,6 +4664,12 @@ msgstr ""
 #. module: l10n_br_sped_ecd
 #: model:ir.model,name:l10n_br_sped_ecd.model_l10n_br_sped_ecd_j932
 msgid "SIGNATÁRIOS DO TERMO DE VERIFICAÇÃO PARA FINS DE SUBSTITUIÇÃO DA ECD."
+msgstr ""
+
+#. module: l10n_br_sped_ecd
+#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_0000__message_has_sms_error
+#: model:ir.model.fields,field_description:l10n_br_sped_ecd.field_l10n_br_sped_ecd_9_0000__message_has_sms_error
+msgid "SMS Delivery error"
 msgstr ""
 
 #. module: l10n_br_sped_ecd

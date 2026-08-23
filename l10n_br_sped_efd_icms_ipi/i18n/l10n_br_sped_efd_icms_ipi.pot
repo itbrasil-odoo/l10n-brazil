@@ -4,8 +4,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Odoo Server 16.0\n"
+"Project-Id-Version: Odoo Server 18.0+e\n"
 "Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-23 21:40+0000\n"
+"PO-Revision-Date: 2026-08-23 21:40+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -512,6 +514,12 @@ msgid ""
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_CONT
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_CONT
+msgid "A"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_CONT
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_CONT
 msgid "A - Valor total referente às prestações de serviço do período"
@@ -976,6 +984,12 @@ msgid "Attachment Count"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_MAT_TERC
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_MAT_TERC
+msgid "B"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_MAT_TERC
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_MAT_TERC
 msgid ""
@@ -1181,6 +1195,12 @@ msgstr ""
 #. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model,name:l10n_br_sped_efd_icms_ipi.model_l10n_br_sped_efd_icms_ipi_1350
 msgid "Bombas."
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_MAT_PROP
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_MAT_PROP
+msgid "C"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
@@ -9276,6 +9296,12 @@ msgid "Dívida ativa – cobrança amigável"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISNT
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISNT
+msgid "E"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISNT
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISNT
 msgid "E - Valor total das operações isentas ou não-tributadas pelo ISS"
@@ -9733,6 +9759,12 @@ msgid "Exportação de café cru"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_DED_BC
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_DED_BC
+msgid "F"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_DED_BC
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_DED_BC
 msgid "F - Valor total das deduções da base de cálculo (B + C + D + E)"
@@ -9876,6 +9908,12 @@ msgid ""
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_BC_ISS
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_BC_ISS
+msgid "G"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_BC_ISS
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_BC_ISS
 msgid "G - Valor total da base de cálculo do ISS"
@@ -9950,6 +9988,12 @@ msgstr ""
 #. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model,name:l10n_br_sped_efd_icms_ipi.model_l10n_br_sped_efd_icms_ipi_1980
 msgid "GIAF 4."
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_BC_ISS_RT
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_BC_ISS_RT
+msgid "H"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
@@ -10975,7 +11019,9 @@ msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0000__message_has_error
+#: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0000__message_has_sms_error
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_0000__message_has_error
+#: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_0000__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
 msgstr ""
 
@@ -13594,10 +13640,22 @@ msgid "Itens dos Resumos Diários dos Documentos."
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISS_RT
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISS_RT
+msgid "J"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISS_RT
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISS_RT
 msgid ""
 "J - Valor total do ISS retido pelo tomador nas prestações do declarante"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_DED
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_DED
+msgid "K"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
@@ -13777,6 +13835,12 @@ msgid ""
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISS_REC
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISS_REC
+msgid "L"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISS_REC
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISS_REC
 msgid "L - Valor total apurado do ISS próprio a recolher (I - J - K)"
@@ -13790,254 +13854,6 @@ msgstr ""
 #. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model,name:l10n_br_sped_efd_icms_ipi.model_l10n_br_sped_efd_icms_ipi_1360
 msgid "Lacres das bombas."
-msgstr ""
-
-#. module: l10n_br_sped_efd_icms_ipi
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0000____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0002____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0005____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0015____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0150____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0175____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0190____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0200____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0205____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0206____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0210____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0220____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0221____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0300____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0305____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0400____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0450____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0460____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0500____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0600____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1010____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1105____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1110____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1200____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1210____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1250____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1255____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1300____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1310____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1320____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1350____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1360____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1370____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1390____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1391____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1400____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1500____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1510____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1600____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1601____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1700____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1710____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1800____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1900____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1910____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1920____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1921____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1922____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1923____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1925____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1926____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1960____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1970____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1975____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_1980____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b020____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b025____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b030____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b035____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b350____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b420____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b440____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b460____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b500____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b510____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c101____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c105____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c110____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c111____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c112____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c113____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c114____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c115____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c116____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c120____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c130____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c140____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c141____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c160____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c165____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c170____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c171____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c172____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c173____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c174____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c175____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c176____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c177____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c178____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c179____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c180____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c181____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c185____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c186____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c190____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c191____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c195____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c197____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c300____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c310____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c320____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c321____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c330____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c350____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c370____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c380____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c390____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c400____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c405____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c410____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c420____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c425____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c430____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c460____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c465____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c470____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c480____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c490____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c495____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c500____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c510____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c590____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c591____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c595____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c597____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c600____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c601____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c610____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c690____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c700____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c790____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c791____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c800____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c810____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c815____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c850____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c855____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c857____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c860____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c870____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c880____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c890____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c895____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c897____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d110____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d120____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d130____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d140____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d150____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d160____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d161____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d162____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d170____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d180____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d190____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d195____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d197____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d300____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d301____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d310____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d350____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d355____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d360____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d365____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d370____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d390____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d400____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d410____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d411____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d420____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d500____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d510____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d530____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d590____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d600____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d610____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d690____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d695____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d696____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d697____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d700____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d730____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d731____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d735____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d737____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d750____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d760____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d761____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e110____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e111____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e112____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e113____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e115____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e116____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e200____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e210____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e230____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e240____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e250____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e300____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e310____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e311____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e312____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e313____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e316____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e500____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e510____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e520____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e530____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_e531____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_g110____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_g126____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_g130____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_g140____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_h005____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_h010____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_h020____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_h030____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k010____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k100____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k200____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k210____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k215____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k220____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k230____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k235____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k250____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k255____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k260____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k265____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k270____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k275____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k280____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k290____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k291____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k292____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k301____last_update
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_k302____last_update
-msgid "Last Modified on"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
@@ -14582,17 +14398,17 @@ msgid "Logradouro e endereço do imóvel"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISS_ST
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISS_ST
+msgid "M"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISS_ST
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISS_ST
 msgid ""
 "M - Valor total do ISS substituto a recolher pelas aquisições do declarante "
 "(tomador)"
-msgstr ""
-
-#. module: l10n_br_sped_efd_icms_ipi
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0000__message_main_attachment_id
-#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_0000__message_main_attachment_id
-msgid "Main Attachment"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
@@ -15212,6 +15028,12 @@ msgstr ""
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_c500__MES_DOC_REF
 #: model:ir.model.fields,help:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_d700__MES_DOC_REF
 msgid "Mês e ano da emissão do documento fiscal referenciado."
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_b470__VL_ISS_REC_UNI
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_b470__VL_ISS_REC_UNI
+msgid "N"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
@@ -18802,6 +18624,12 @@ msgid ""
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0000__rating_ids
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_0000__rating_ids
+msgid "Ratings"
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model.fields.selection,name:l10n_br_sped_efd_icms_ipi.selection__l10n_br_sped_efd_icms_ipi_0000__cod_receita__119-3
 msgid "Recolhimentos especiais (outra UF)"
 msgstr ""
@@ -20056,6 +19884,12 @@ msgstr ""
 #. module: l10n_br_sped_efd_icms_ipi
 #: model:ir.model,name:l10n_br_sped_efd_icms_ipi.model_l10n_br_sped_efd_icms_ipi_d400
 msgid "Resumo do Movimento Diário."
+msgstr ""
+
+#. module: l10n_br_sped_efd_icms_ipi
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_0000__message_has_sms_error
+#: model:ir.model.fields,field_description:l10n_br_sped_efd_icms_ipi.field_l10n_br_sped_efd_icms_ipi_20_0000__message_has_sms_error
+msgid "SMS Delivery error"
 msgstr ""
 
 #. module: l10n_br_sped_efd_icms_ipi
