@@ -97,6 +97,36 @@ class SpedDeclaration(models.AbstractModel):
     )
 
     @api.model
+    def default_get(self, fields_list):
+        """Nasce com o registro 0000 preenchido a partir da empresa.
+
+        Os campos do 0000 — CNPJ, nome empresarial, UF, inscrições e os
+        indicadores — são obrigatórios no banco. Sem isto não se cria uma
+        declaração pela tela sem digitar um a um o que o sistema já tem no
+        cadastro da empresa, e a ECD exige quatorze deles. O mapeamento usado é
+        o mesmo do "Pull Registers from Odoo", então a tela e o botão não podem
+        divergir.
+        """
+        vals = super().default_get(fields_list)
+        if not self._odoo_model or not hasattr(self, "_odoo_domain"):
+            return vals
+        esboco = self.new({"company_id": vals.get("company_id") or self.env.company.id})
+        origem = self.env[self._odoo_model].search(
+            self._odoo_domain(None, esboco), limit=1
+        )
+        if not origem:
+            return vals
+        for campo, valor in self._map_from_odoo(origem, None, esboco).items():
+            if (
+                campo in fields_list
+                and campo not in vals
+                and valor is not None
+                and valor is not False
+            ):
+                vals[campo] = valor
+        return vals
+
+    @api.model
     def _get_kind(self) -> str:
         return self._name.replace(".0000", "").split(".")[-1]
 
@@ -165,6 +195,23 @@ class SpedDeclaration(models.AbstractModel):
         )
         top_registers = mixin_env._get_top_registers(kind)
 
+        # O registro 0000 é a PRÓPRIA declaração, e `_pull_records_from_odoo`
+        # só desce para os registros filhos. Sem mapear a declaração aqui, o
+        # cabeçalho do arquivo sai com nome, CNPJ, IE e município em branco —
+        # e o PVA recusa o arquivo logo na primeira linha.
+        if self._odoo_model and hasattr(self, "_odoo_domain"):
+            origem = self.env[self._odoo_model].search(
+                self._odoo_domain(None, self), limit=1
+            )
+            if origem:
+                vals = self._map_from_odoo(origem, None, self)
+                self.write(
+                    {k: v for k, v in vals.items() if v is not None and v is not False}
+                )
+                log_msg.write(
+                    f"<p>0000: {self._odoo_model} → {origem.display_name}</p>"
+                )
+
         for register_model in top_registers:  # Iterate over models, not instances
             try:
                 with self.env.cr.savepoint():
@@ -210,7 +257,11 @@ class SpedDeclaration(models.AbstractModel):
         blocos = defaultdict(list)
         current_bloco = None
         for line in sped_txt.splitlines():
-            if line.startswith(("|0", "|9")):
+            # Uma linha de registro é "|REG|...". Qualquer outra coisa é
+            # ignorada: linhas de resumo dos blocos 0 e 9, e fragmentos
+            # deixados por um campo cujo valor continha quebra de linha. Isso
+            # também garante que o split nunca estoure em linha corrompida.
+            if not line.startswith("|") or len(line) < 2 or line[1] in "09":
                 continue
             current_bloco = line[1]
             if current_bloco:

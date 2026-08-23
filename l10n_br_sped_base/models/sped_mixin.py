@@ -23,7 +23,7 @@ SPED_ENCODING = "iso-8859-1"
 LAYOUT_VERSIONS = {
     "ecd": "9",
     "ecf": "9",
-    "efd_icms_ipi": "17",
+    "efd_icms_ipi": "20",
     "efd_pis_cofins": "6",
     "fake": "9",  # tests; similar to ecd
 }
@@ -544,6 +544,13 @@ class SpedMixin(models.AbstractModel):
             # em branco e o PVA recusa o registro.
             field = self._fields.get(fname) or register_spec._fields[fname]
             val = self._format_field_value(field, value)
+            if isinstance(val, str) and ("\n" in val or "\r" in val):
+                # O SPED é um arquivo plano delimitado por pipe, com um
+                # registro por linha: uma quebra de linha dentro de um campo
+                # parte a linha do registro e corrompe o arquivo (o PVA
+                # recusa). Acontece com textos vindos da NF-e (observações,
+                # descrição de produto) que contêm quebra de linha.
+                val = val.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
             sped.write(f"{val}|")
 
     def _format_field_value(self, field, value):
@@ -619,25 +626,34 @@ class SpedMixin(models.AbstractModel):
         """
         declaration = self._context["declaration"]
 
+        # `self._fields` em vez de `fields_get()`: o resultado destas duas
+        # listas depende apenas do MODELO, nunca do registro em processamento,
+        # mas este método é recursivo (uma vez por registro pai), então o
+        # `fields_get()` era refeito a cada documento e a cada item. Medido em
+        # 400 documentos: 71% do tempo total de `button_populate_sped_from_odoo`
+        # estava aí. `_fields` já está em memória e dá a mesma informação.
         children = [
-            v["relation"]
-            for k, v in self.fields_get().items()
-            if v["type"] == "one2many" and k.startswith("reg_")
+            f.comodel_name
+            for name, f in self._fields.items()
+            if f.type == "one2many" and name.startswith("reg_")
         ]
         parent_field = None
         if parent_register:
-            parent_field = [
-                k
-                for k, v in self.fields_get().items()
-                if v["type"] == "many2one"
-                and k.startswith("reg_")
-                and k.endswith("_id")
-            ][0]
+            parent_field = next(
+                name
+                for name, f in self._fields.items()
+                if f.type == "many2one"
+                and name.startswith("reg_")
+                and name.endswith("_id")
+            )
 
         if self._odoo_model and hasattr(self, "_odoo_domain"):
-            records = self.env[self._odoo_model].search(
-                self._odoo_domain(parent_record, declaration)
-            )
+            if self._odoo_model in self.env:
+                records = self.env[self._odoo_model].search(
+                    self._odoo_domain(parent_record, declaration)
+                )
+            else:  # o mapeamento pode ser de um módulo que não está instalado
+                records = []
 
         elif hasattr(self, "_odoo_query"):
             self._cr.execute(*self._odoo_query(parent_record, declaration))
@@ -667,6 +683,11 @@ class SpedMixin(models.AbstractModel):
 
         self._log_chatter_sped_item(log_msg, level, records)
 
+        # Um único `create()` para todo o nível, em vez de um por registro.
+        # `_map_from_odoo` continua sendo chamado registro a registro, então o
+        # contrato que cada leiaute implementa não muda. Só a escrita é que
+        # passa a ser em lote, que é o que o ORM sabe otimizar.
+        vals_list = []
         for index, record in enumerate(records):
             # TODO find a way/mode to skip pulling existing records
             # may be search for existing register with res_model/res_id
@@ -679,8 +700,13 @@ class SpedMixin(models.AbstractModel):
                 register_vals["res_id"] = record.id
             if parent_register:
                 register_vals[parent_field] = parent_register.id
-            register = self.create(register_vals)
+            vals_list.append(register_vals)
 
+        # `create` com lista devolve os registros na mesma ordem da lista,
+        # então o zip abaixo casa cada registro criado com a sua origem.
+        registers = self.create(vals_list) if vals_list else self.browse()
+
+        for register, record in zip(registers, records, strict=True):
             for child in children:
                 self.env[child]._pull_records_from_odoo(
                     kind,
