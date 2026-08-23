@@ -258,6 +258,33 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         arch = self.env["l10n_br_sped.fake.i010"].get_view(view_type="form")["arch"]
         self.assertIn("<list", arch, "a sub-view do o2m deveria ser uma lista")
 
+    def test_generated_fields_use_readonly_not_attrs(self):
+        """As views geradas não podem usar `attrs`.
+
+        A 17 removeu o atributo. Numa view carregada de XML isso vira erro de
+        validação; numa view gerada em código, não — nada a valida, e o `attrs`
+        é só ignorado. O efeito é silencioso e sério: o campo continua editável
+        numa declaração já concluída.
+        """
+        for modelo in ("l10n_br_sped.fake.0000", "l10n_br_sped.fake.i010"):
+            arch = self.env[modelo].get_view(view_type="form")["arch"]
+            self.assertNotIn("attrs=", arch, f"{modelo} ainda gera attrs")
+        arch = self.env["l10n_br_sped.fake.0000"].get_view(view_type="form")["arch"]
+        self.assertIn("readonly=\"state not in", arch,
+                      "a condição de somente-leitura sumiu junto com o attrs")
+
+    def test_generated_form_uses_the_chatter_tag(self):
+        """A declaração precisa montar o chatter com a tag da 18.
+
+        Mesma classe de defeito da `tree`, e igualmente silenciosa: o bloco
+        `<div class="oe_chatter">` da 17 não dá erro, os campos dentro dele são
+        renderizados como widgets comuns. O efeito é a lista de atividades
+        aparecendo crua embaixo da folha, e os seguidores não aparecendo.
+        """
+        arch = self.env["l10n_br_sped.fake.9.0000"].get_view(view_type="form")["arch"]
+        self.assertIn("<chatter", arch, "o formulário deveria montar <chatter/>")
+        self.assertNotIn("oe_chatter", arch, "ainda monta o chatter da 17")
+
     def test_format_field_value(self):
         """
         Test the _format_field_value method from SpedMixin,
@@ -349,8 +376,8 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
             arch,
         )
 
-        self.assertIn(  # some footer field
-            '<field name="message_ids"',
+        self.assertIn(  # o chatter, na tag da 18
+            "<chatter",
             arch,
         )
 

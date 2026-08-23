@@ -161,15 +161,15 @@ class Registro0000(models.Model):
     def _append_top_view_elements(self, group, inline=False):
         res = super()._append_top_view_elements(group)
         group.append(
-            E.field(name="cod_obrigacao", required="1", attrs=EDITABLE_ON_DRAFT)
+            E.field(name="cod_obrigacao", required="1", readonly=EDITABLE_ON_DRAFT)
         )
-        group.append(E.field(name="cod_receita", required="1", attrs=EDITABLE_ON_DRAFT))
-        group.append(E.field(name="ind_apur", required="1", attrs=EDITABLE_ON_DRAFT))
+        group.append(E.field(name="cod_receita", required="1", readonly=EDITABLE_ON_DRAFT))
+        group.append(E.field(name="ind_apur", required="1", readonly=EDITABLE_ON_DRAFT))
         group.append(
-            E.field(name="CLAS_ESTAB_IND", required="1", attrs=EDITABLE_ON_DRAFT)
+            E.field(name="CLAS_ESTAB_IND", required="1", readonly=EDITABLE_ON_DRAFT)
         )
         group.append(
-            E.field(name="ind_tp_leiaute", required="1", attrs=EDITABLE_ON_DRAFT)
+            E.field(name="ind_tp_leiaute", required="1", readonly=EDITABLE_ON_DRAFT)
         )
         return res
 

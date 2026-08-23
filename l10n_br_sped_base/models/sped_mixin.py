@@ -30,7 +30,10 @@ LAYOUT_VERSIONS = {
 
 MAX_REGISTER_NAME = 40
 
-EDITABLE_ON_DRAFT = "{'readonly': [('state', 'not in', ['draft'])]}"
+# A 17 removeu `attrs`: a condição virou uma expressão direta no atributo. O
+# `attrs` antigo não dá erro nas views geradas em código — nada as valida — ele
+# simplesmente não faz nada, e o campo fica editável numa declaração concluída.
+EDITABLE_ON_DRAFT = "state not in ['draft']"
 
 
 class SpedMixin(models.AbstractModel):
@@ -241,7 +244,7 @@ class SpedMixin(models.AbstractModel):
                 field_tag = E.field(
                     name=fname,
                     colspan="4",
-                    attrs=EDITABLE_ON_DRAFT,
+                    readonly=EDITABLE_ON_DRAFT,
                     context="{'default_declaration_id': declaration_id}",
                 )
                 if field.type == "one2many":
@@ -297,7 +300,7 @@ class SpedMixin(models.AbstractModel):
                 group.append(field_tag)
                 group.append(E.newline())
             elif fname.isupper():
-                group.append(E.field(name=fname, attrs=EDITABLE_ON_DRAFT))
+                group.append(E.field(name=fname, readonly=EDITABLE_ON_DRAFT))
         group.append(E.separator())
         form = E.form()
         self._append_view_header(form)
@@ -318,11 +321,7 @@ class SpedMixin(models.AbstractModel):
         group.append(
             E.field(
                 name="declaration_id",
-                attrs=(
-                    "{'readonly': "
-                    "[('state', 'not in', ['draft']), "
-                    "('declaration_id', '!=', False)]}"
-                ),
+                readonly="state not in ['draft'] and declaration_id",
                 invisible="1" if inline else "0",
             )
         )

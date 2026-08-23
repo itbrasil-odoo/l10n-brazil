@@ -374,14 +374,15 @@ class SpedDeclaration(models.AbstractModel):
 
     @api.model
     def _append_view_footer(self, form):
-        """Append the chatter elements to the form view footer."""
-        div = E.div(
-            name="message_follower_ids",
-        )
-        div.attrib["class"] = "oe_chatter"
-        div.append(E.field(name="activity_ids"))
-        div.append(E.field(name="message_ids"))
-        form.append(div)
+        """Append the chatter to the form view footer.
+
+        Version 18 replaced the `<div class="oe_chatter">` block with a single
+        `<chatter/>` tag. The old markup does not fail: the fields inside it are
+        rendered as ordinary widgets, so the activity list shows up as a bare
+        table under the sheet and the followers, which were only a `name` on the
+        div, do not show up at all.
+        """
+        form.append(E.chatter())
 
     @api.model
     def _append_top_view_elements(self, group, inline=False):
