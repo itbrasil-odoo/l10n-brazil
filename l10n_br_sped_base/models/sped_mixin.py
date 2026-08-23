@@ -154,7 +154,7 @@ class SpedMixin(models.AbstractModel):
         :rtype: etree._Element
         """
         desc = self._description
-        tree = E.tree(string=desc)
+        tree = E.list(string=desc)
         fields = self.fields_get()
         added_fields = set()
 
@@ -261,7 +261,7 @@ class SpedMixin(models.AbstractModel):
                         for tree_field in tree_fields
                     ):
                         # few fields -> editable tree
-                        field_tree = E.tree(editable="bottom")
+                        field_tree = E.list(editable="bottom")
                         field_tree.append(E.field(name="declaration_id", invisible="1"))
                         field_tree.append(E.field(name="state", invisible="1"))
                         field_tree.append(E.field(name="reference", widget="reference"))
@@ -273,7 +273,7 @@ class SpedMixin(models.AbstractModel):
                             )
                         field_tag.append(field_tree)
                     else:
-                        field_tree = E.tree()
+                        field_tree = E.list()
                         field_tree.append(E.field(name="state", invisible="1"))
                         for index, tree_field in enumerate(tree_fields):
                             if index > 6:

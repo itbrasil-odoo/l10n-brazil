@@ -243,6 +243,21 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
             arch,
         )
 
+    def test_generated_views_use_the_list_tag(self):
+        """As views geradas não podem usar a tag `tree`.
+
+        Na 18 o registro de views do cliente web não conhece mais `tree`. Uma
+        sub-view com a tag antiga não dá erro no servidor: ela chega ao
+        navegador e derruba o formulário inteiro com `Cannot find key "tree" in
+        the "views" registry`, sem dizer qual campo nem qual modelo. Só aparece
+        quando alguém abre a tela, e por isso passou despercebido no port.
+        """
+        for tipo in ("form", "list"):
+            arch = self.env["l10n_br_sped.fake.i010"].get_view(view_type=tipo)["arch"]
+            self.assertNotIn("<tree", arch, f"view {tipo} ainda gera a tag tree")
+        arch = self.env["l10n_br_sped.fake.i010"].get_view(view_type="form")["arch"]
+        self.assertIn("<list", arch, "a sub-view do o2m deveria ser uma lista")
+
     def test_format_field_value(self):
         """
         Test the _format_field_value method from SpedMixin,

@@ -329,7 +329,9 @@ class SpecViewMixin(models.AbstractModel):
         :rtype: etree._Element
         """
         desc = self._description
-        tree = E.tree(string=desc)
+        # `list`, não `tree`: na 18 o registro de views do cliente não conhece
+        # mais a tag antiga, e a sub-view derruba o formulário inteiro.
+        tree = E.list(string=desc)
         c = 0
         required_fields_num = len([f[1] for f in self._fields.items() if f[1].required])
         for fname, field in self._fields.items():
