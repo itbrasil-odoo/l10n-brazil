@@ -270,8 +270,11 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
             arch = self.env[modelo].get_view(view_type="form")["arch"]
             self.assertNotIn("attrs=", arch, f"{modelo} ainda gera attrs")
         arch = self.env["l10n_br_sped.fake.0000"].get_view(view_type="form")["arch"]
-        self.assertIn("readonly=\"state not in", arch,
-                      "a condição de somente-leitura sumiu junto com o attrs")
+        self.assertIn(
+            'readonly="state not in',
+            arch,
+            "a condição de somente-leitura sumiu junto com o attrs",
+        )
 
     def test_generated_form_uses_the_chatter_tag(self):
         """A declaração precisa montar o chatter com a tag da 18.

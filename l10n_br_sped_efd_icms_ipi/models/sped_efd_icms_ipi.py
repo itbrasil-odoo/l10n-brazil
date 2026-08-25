@@ -163,7 +163,9 @@ class Registro0000(models.Model):
         group.append(
             E.field(name="cod_obrigacao", required="1", readonly=EDITABLE_ON_DRAFT)
         )
-        group.append(E.field(name="cod_receita", required="1", readonly=EDITABLE_ON_DRAFT))
+        group.append(
+            E.field(name="cod_receita", required="1", readonly=EDITABLE_ON_DRAFT)
+        )
         group.append(E.field(name="ind_apur", required="1", readonly=EDITABLE_ON_DRAFT))
         group.append(
             E.field(name="CLAS_ESTAB_IND", required="1", readonly=EDITABLE_ON_DRAFT)
