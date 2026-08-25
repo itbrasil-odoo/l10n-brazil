@@ -38,6 +38,10 @@ class TestPosOrderInvoice(TransactionCase):
             )
 
         cls.partner = cls.env["res.partner"].create({"name": "Cliente de Balcão"})
+        # Um produto de balcão realista: mercadoria para revenda, com NCM. Sem
+        # tipo fiscal nenhuma linha da operação casa, e a determinação devolve
+        # vazio — que é exatamente o que este teste precisa distinguir de uma
+        # ponte quebrada.
         cls.product = cls.env["product.product"].create(
             {
                 "name": "Produto de Balcão",
@@ -45,6 +49,8 @@ class TestPosOrderInvoice(TransactionCase):
                 "available_in_pos": True,
                 "list_price": 100.0,
                 "taxes_id": [Command.clear()],
+                "fiscal_type": "00",
+                "ncm_id": cls.env.ref("l10n_br_fiscal.ncm_22011000").id,
             }
         )
         cls.payment_method = cls.env["pos.payment.method"].create(
@@ -126,4 +132,27 @@ class TestPosOrderInvoice(TransactionCase):
         self.assertTrue(
             move.fiscal_document_id,
             "A fatura saiu sem documento fiscal associado — não há o que emitir.",
+        )
+
+    def test_invoice_line_from_pos_sale_carries_cfop(self):
+        """A linha da fatura carrega operação de linha e CFOP.
+
+        A operação no cabeçalho não basta: é a linha que determina CFOP, CST e
+        imposto por produto. Sem ela a nota tem operação mas não tem o que
+        declarar.
+        """
+        move = self._sell().account_move
+        line = move.invoice_line_ids.filtered(
+            lambda aml: aml.product_id == self.product
+        )
+        self.assertTrue(line, "A fatura saiu sem a linha do produto vendido.")
+
+        self.assertTrue(
+            line.fiscal_operation_line_id,
+            "A linha da fatura saiu sem operação fiscal de linha: é ela que "
+            "resolve CFOP e CST para este produto.",
+        )
+        self.assertTrue(
+            line.cfop_id,
+            "A linha da fatura saiu sem CFOP — a nota não tem o que declarar.",
         )
