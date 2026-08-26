@@ -35,6 +35,12 @@ class PosOrder(models.Model):
         domain=lambda self: self._fiscal_operation_domain(),
     )
 
+    fiscal_document_state = fields.Selection(
+        related="account_move.state_edoc",
+        string="Situação do Documento Fiscal",
+        store=True,
+    )
+
     l10n_br_emit_document = fields.Boolean(
         string="Emitir documento fiscal",
         copy=False,
