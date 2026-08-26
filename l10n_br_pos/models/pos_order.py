@@ -90,16 +90,20 @@ class PosOrder(models.Model):
         da apuração sem que ninguém seja avisado.
         """
         vals = super()._prepare_invoice_vals()
-        operation = self.fiscal_operation_id
+        # Elevado porque a determinação lê o cadastro fiscal (operação, tipo e
+        # série do documento), que quem opera o caixa não tem direito de ler.
+        # É o mesmo tratamento que o ponto de venda dá à criação da fatura.
+        order = self.sudo()
+        operation = order.fiscal_operation_id
         if not operation:
             return vals
 
         vals["fiscal_operation_id"] = operation.id
-        document_type = self.document_type_id or self.company_id.document_type_id
+        document_type = order.document_type_id or order.company_id.document_type_id
         if document_type:
             vals["document_type_id"] = document_type.id
             document_serie = document_type.get_document_serie(
-                self.company_id, operation
+                order.company_id, operation
             )
             if document_serie:
                 vals["document_serie_id"] = document_serie.id

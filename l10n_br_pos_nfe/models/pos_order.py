@@ -23,8 +23,11 @@ class PosOrder(models.Model):
         dois grupos, não um só somado.
         """
         self.ensure_one()
+        # Elevado: o grupo card é registro do spec da NF-e, e quem opera o
+        # caixa não é gerente de NF-e.
+        order = self.sudo()
         commands = []
-        for payment in self.payment_ids:
+        for payment in order.payment_ids:
             if not payment.fiscal_payment_form:
                 continue
             values = {
@@ -36,7 +39,7 @@ class PosOrder(models.Model):
             }
             card = self._prepare_nfe_card(payment)
             if card:
-                values["nfe40_card"] = self.env["nfe.40.card"].create(card).id
+                values["nfe40_card"] = self.env["nfe.40.card"].sudo().create(card).id
             commands.append(Command.create(values))
         return commands
 
