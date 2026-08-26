@@ -43,10 +43,6 @@ class PosOrder(models.Model):
     )
 
     @api.model
-    def _load_pos_data_fields(self, config_id):
-        return super()._load_pos_data_fields(config_id) + ["l10n_br_emit_document"]
-
-    @api.model
     def _get_fiscal_lines_field_name(self):
         """O ponto de venda chama de ``lines`` o que o mixin espera em
         ``fiscal_line_ids``."""
