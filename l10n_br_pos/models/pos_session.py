@@ -4,6 +4,8 @@
 from odoo import _, models
 from odoo.exceptions import UserError
 
+from ..constants import FISCAL_CARD_BRAND, FISCAL_PAYMENT_FORM_WITH_CARD
+
 
 class PosSession(models.Model):
     _inherit = "pos.session"
@@ -18,6 +20,10 @@ class PosSession(models.Model):
         result = super()._load_pos_data(data)
         result["data"][0]["_l10n_br_can_emit_document"] = self.env.user.has_group(
             "l10n_br_pos.group_pos_emit_document"
+        )
+        result["data"][0]["_l10n_br_card_brands"] = FISCAL_CARD_BRAND
+        result["data"][0]["_l10n_br_forms_with_card"] = list(
+            FISCAL_PAYMENT_FORM_WITH_CARD
         )
         return result
 
