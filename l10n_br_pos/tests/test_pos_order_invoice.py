@@ -1,8 +1,10 @@
 # Copyright 2026 IT Brasil
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
-from odoo import Command
-from odoo.exceptions import UserError
+from unittest.mock import patch
+
+from odoo import Command, _
+from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -75,7 +77,7 @@ class TestPosOrderInvoice(TransactionCase):
             }
         )
 
-    def _sell(self, price=100.0, to_invoice=True):
+    def _sell(self, price=100.0, to_invoice=True, emit=False):
         """Uma venda de balcão paga, faturada ou não, como o PDV a produz."""
         session = self.env["pos.session"].create(
             {"config_id": self.config.id, "user_id": self.env.uid}
@@ -87,6 +89,7 @@ class TestPosOrderInvoice(TransactionCase):
                 "company_id": self.company.id,
                 "partner_id": self.partner.id,
                 "to_invoice": to_invoice,
+                "l10n_br_emit_document": emit,
                 "amount_tax": 0.0,
                 "amount_total": price,
                 "amount_paid": price,
@@ -209,3 +212,60 @@ class TestPosOrderInvoice(TransactionCase):
             message,
             f"O erro não diz qual meio de pagamento disparou: {message}",
         )
+
+
+@tagged("post_install", "-at_install")
+class TestPosOrderEmit(TestPosOrderInvoice):
+    """Transmitir a NF-e a partir do balcão.
+
+    A venda de balcão monta o documento fiscal e o deixa em ``a_enviar``. Quem
+    opera o caixa precisa poder transmitir na hora, quando o cliente pede a
+    nota — mas transmitir é ato fiscal, então depende de permissão.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.emit_group = cls.env.ref("l10n_br_pos.group_pos_emit_document")
+
+    def test_flagged_sale_transmits_the_fiscal_document(self):
+        """Marcada para emitir, a venda transmite o documento."""
+        self.env.user.groups_id = [Command.link(self.emit_group.id)]
+        sent = []
+        with patch.object(
+            type(self.env["account.move"]),
+            "action_document_send",
+            lambda records: sent.append(records),
+        ):
+            order = self._sell(emit=True)
+
+        self.assertTrue(sent, "A venda foi marcada para emitir e nada foi transmitido.")
+        self.assertIn(order.account_move, sent[0])
+
+    def test_sale_survives_a_failed_transmission(self):
+        """SEFAZ fora não pode derrubar a venda: o documento fica pendente."""
+        self.env.user.groups_id = [Command.link(self.emit_group.id)]
+
+        def explode(records):
+            raise UserError(_("SEFAZ indisponível"))
+
+        with patch.object(
+            type(self.env["account.move"]), "action_document_send", explode
+        ):
+            order = self._sell(emit=True)
+
+        self.assertTrue(
+            order.account_move.exists(),
+            "A falha na transmissão derrubou a venda inteira — o caixa fica "
+            "travado por indisponibilidade da SEFAZ.",
+        )
+        self.assertTrue(
+            order.account_move.fiscal_document_id,
+            "A venda perdeu o documento fiscal ao falhar a transmissão.",
+        )
+
+    def test_emitting_without_permission_is_refused(self):
+        """Sem o grupo, a venda não transmite — e diz por quê."""
+        self.env.user.groups_id = [Command.unlink(self.emit_group.id)]
+        with self.assertRaises(AccessError):
+            self._sell(emit=True)

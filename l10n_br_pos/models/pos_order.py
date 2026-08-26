@@ -2,7 +2,12 @@
 # Copyright 2026 IT Brasil
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
-from odoo import api, fields, models
+import logging
+
+from odoo import _, api, fields, models
+from odoo.exceptions import AccessError
+
+_logger = logging.getLogger(__name__)
 
 
 class PosOrder(models.Model):
@@ -29,6 +34,17 @@ class PosOrder(models.Model):
         precompute=True,
         domain=lambda self: self._fiscal_operation_domain(),
     )
+
+    l10n_br_emit_document = fields.Boolean(
+        string="Emitir documento fiscal",
+        copy=False,
+        help="Transmite o documento fiscal assim que a venda gera a fatura. "
+        "Sem isto o documento é montado e fica pendente de envio.",
+    )
+
+    @api.model
+    def _load_pos_data_fields(self, config_id):
+        return super()._load_pos_data_fields(config_id) + ["l10n_br_emit_document"]
 
     @api.model
     def _get_fiscal_lines_field_name(self):
@@ -97,3 +113,54 @@ class PosOrder(models.Model):
         fiscal_vals = pos_order_line._prepare_br_fiscal_dict()
         fiscal_vals.update(vals)
         return fiscal_vals
+
+    def _generate_pos_order_invoice(self):
+        result = super()._generate_pos_order_invoice()
+        to_emit = self.filtered("l10n_br_emit_document")
+        if to_emit:
+            to_emit._l10n_br_send_fiscal_documents()
+        return result
+
+    def _l10n_br_send_fiscal_documents(self):
+        """Transmite o documento fiscal das vendas marcadas para emitir.
+
+        Falha de transmissão não derruba a venda. A SEFAZ cai, rejeita e fica
+        lenta; o balcão não pode parar junto. O documento permanece pendente,
+        para ser retransmitido depois, e o motivo fica registrado na fatura —
+        que é onde quem for retransmitir vai procurar.
+
+        Cada envio roda no seu próprio savepoint: sem isso, uma exceção depois
+        de escritas parciais envenena a transação e leva embora a fatura que
+        acabou de ser criada.
+        """
+        if not self.env.user.has_group("l10n_br_pos.group_pos_emit_document"):
+            raise AccessError(
+                _(
+                    "Você não tem permissão para emitir documento fiscal pelo "
+                    "ponto de venda. A venda pode ser faturada normalmente: o "
+                    "documento fica pendente para quem tiver a permissão "
+                    "transmitir."
+                )
+            )
+        for order in self:
+            move = order.account_move
+            if not move or not move.fiscal_document_id:
+                continue
+            try:
+                with self.env.cr.savepoint():
+                    move.action_document_send()
+            except Exception as error:  # noqa: BLE001 - ver docstring
+                _logger.warning(
+                    "PDV %s: falha ao transmitir o documento fiscal da fatura "
+                    "%s, que fica pendente de envio: %s",
+                    order.name,
+                    move.name,
+                    error,
+                )
+                move.message_post(
+                    body=_(
+                        "Falha ao transmitir o documento fiscal pelo ponto de "
+                        "venda. O documento continua pendente de envio.\n\n%s"
+                    )
+                    % error
+                )

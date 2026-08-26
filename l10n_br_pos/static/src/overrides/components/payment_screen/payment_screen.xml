@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Copyright 2026 IT Brasil
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<templates id="template" xml:space="preserve">
+
+    <t
+        t-name="l10n_br_pos.PaymentScreenEmit"
+        t-inherit="point_of_sale.PaymentScreen"
+        t-inherit-mode="extension"
+    >
+        <xpath expr="//button[hasclass('js_invoice')]" position="after">
+            <button
+                t-if="pos.session._l10n_br_can_emit_document"
+                class="button js_l10n_br_emit btn btn-light btn-lg d-flex justify-content-between align-items-baseline w-100 w-md-50 lh-lg"
+                t-att-class="{ 'highlight active': currentOrder.l10n_br_emit_document }"
+                t-on-click="toggleL10nBrEmitDocument"
+            >
+                <span><i class="fa fa-paper-plane-o me-2" />Emitir NF-e</span>
+                <i
+                    class="fa me-2"
+                    t-attf-class="{{ currentOrder.l10n_br_emit_document ? 'fa-check-square text-action' : 'fa-square-o' }}"
+                />
+            </button>
+        </xpath>
+    </t>
+
+</templates>

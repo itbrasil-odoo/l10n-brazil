@@ -8,6 +8,19 @@ from odoo.exceptions import UserError
 class PosSession(models.Model):
     _inherit = "pos.session"
 
+    def _load_pos_data(self, data):
+        """Leva ao balcão se este operador pode transmitir documento fiscal.
+
+        A tela precisa esconder o botão de quem não tem a permissão; a recusa
+        no servidor continua valendo, mas oferecer um botão que sempre recusa
+        é convite a erro no meio do atendimento.
+        """
+        result = super()._load_pos_data(data)
+        result["data"][0]["_l10n_br_can_emit_document"] = self.env.user.has_group(
+            "l10n_br_pos.group_pos_emit_document"
+        )
+        return result
+
     def _get_receivable_account(self, payment_method):
         """Explica a configuração que falta em vez de estourar no banco.
 

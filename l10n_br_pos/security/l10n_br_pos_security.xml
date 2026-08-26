@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 IT Brasil
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo noupdate="0">
+    <record id="group_pos_emit_document" model="res.groups">
+        <field name="name">Emitir documento fiscal pelo ponto de venda</field>
+        <field
+            name="category_id"
+            ref="l10n_br_fiscal.module_category_l10n_br_fiscal_management"
+        />
+        <field name="comment">Transmitir a nota é ato fiscal: quem opera o caixa
+        só emite se receber esta permissão. Sem ela a venda ainda monta o
+        documento, que fica pendente para alguém transmitir.</field>
+    </record>
+</odoo>
