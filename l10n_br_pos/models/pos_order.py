@@ -41,6 +41,12 @@ class PosOrder(models.Model):
         store=True,
     )
 
+    fiscal_document_report_id = fields.Many2one(
+        related="account_move.file_report_id",
+        string="Arquivo do Documento Fiscal",
+        store=True,
+    )
+
     l10n_br_emit_document = fields.Boolean(
         string="Emitir documento fiscal",
         copy=False,
