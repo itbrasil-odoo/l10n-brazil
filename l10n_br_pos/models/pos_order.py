@@ -128,6 +128,12 @@ class PosOrder(models.Model):
         Cada envio roda no seu próprio savepoint: sem isso, uma exceção depois
         de escritas parciais envenena a transação e leva embora a fatura que
         acabou de ser criada.
+
+        A transmissão roda elevada porque escreve em ``account.move``, e quem
+        opera o balcão não tem — nem deve ter — direito de faturamento. É o
+        mesmo tratamento que o ponto de venda já dá à criação e ao lançamento
+        da fatura. A elevação executa o que o grupo autorizou logo acima; não
+        substitui a autorização.
         """
         if not self.env.user.has_group("l10n_br_pos.group_pos_emit_document"):
             raise AccessError(
@@ -144,7 +150,7 @@ class PosOrder(models.Model):
                 continue
             try:
                 with self.env.cr.savepoint():
-                    move.action_document_send()
+                    move.sudo().action_document_send()
             except Exception as error:  # noqa: BLE001 - ver docstring
                 _logger.warning(
                     "PDV %s: falha ao transmitir o documento fiscal da fatura "

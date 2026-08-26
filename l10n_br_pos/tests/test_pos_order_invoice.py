@@ -278,3 +278,64 @@ class TestPosOrderEmit(TestPosOrderInvoice):
         self.env.user.groups_id = [Command.unlink(self.emit_group.id)]
         with self.assertRaises(AccessError):
             self._sell(emit=True)
+
+    def test_operator_without_invoicing_rights_can_transmit(self):
+        """O caixa transmite sem ter direito de escrita na fatura.
+
+        Quem opera o balcão não tem (nem deve ter) permissão de faturamento, e
+        transmitir escreve em account.move. O core do ponto de venda já cria e
+        posta a fatura com sudo(); a transmissão precisa do mesmo tratamento,
+        senão a venda termina com "Você não tem permissão para modificar
+        registros de Lançamento de diário".
+
+        O sudo executa o que o grupo já autorizou — não substitui a
+        autorização, que continua sendo verificada antes.
+
+        Rodar como usuário restrito é o ponto do teste: o TransactionCase é
+        superusuário por padrão e passaria sem provar nada.
+        """
+        operador = (
+            self.env["res.users"]
+            .with_context(no_reset_password=True)
+            .create(
+                {
+                    "name": "Operadora de Caixa",
+                    "login": "caixa_teste",
+                    "company_id": self.company.id,
+                    "company_ids": [Command.set([self.company.id])],
+                    "groups_id": [
+                        Command.set(
+                            [
+                                self.env.ref("base.group_user").id,
+                                self.env.ref("point_of_sale.group_pos_user").id,
+                                self.emit_group.id,
+                            ]
+                        )
+                    ],
+                }
+            )
+        )
+        self.assertFalse(
+            operador.has_group("account.group_account_invoice"),
+            "O teste perde o sentido se a operadora puder faturar.",
+        )
+
+        # A venda é faturada sem emitir: a transmissão é disparada logo abaixo,
+        # já como a operadora, que é o que este teste mede.
+        order = self._sell(emit=False)
+
+        elevado = []
+        with patch.object(
+            type(self.env["account.move"]),
+            "action_document_send",
+            lambda records: elevado.append(records.env.su),
+        ):
+            order.with_user(operador)._l10n_br_send_fiscal_documents()
+
+        self.assertTrue(elevado, "A transmissão não chegou a ser chamada.")
+        self.assertTrue(
+            elevado[0],
+            "A transmissão rodou com os direitos da operadora, que não pode "
+            "escrever em account.move — a venda terminaria em erro de "
+            "permissão no lançamento de diário.",
+        )
