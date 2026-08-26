@@ -156,3 +156,25 @@ class TestPosOrderInvoice(TransactionCase):
             line.cfop_id,
             "A linha da fatura saiu sem CFOP — a nota não tem o que declarar.",
         )
+
+    def test_invoice_takes_document_type_chosen_on_the_pos(self):
+        """O documento da fatura é o escolhido no PDV, não o padrão da empresa.
+
+        Um balcão que vende serviço precisa emitir NFS-e mesmo quando o padrão
+        da empresa é NF-e — e o contrário, num balcão de peças. Sem isso a
+        escolha do documento não existe: toda venda sai no padrão da empresa.
+        """
+        nfe = self.env.ref("l10n_br_fiscal.document_55")
+        nfse = self.env.ref("l10n_br_fiscal.document_SE")
+        self.company.document_type_id = nfe
+        self.config.out_pos_document_type_id = nfse
+
+        move = self._sell().account_move
+        move.invalidate_recordset()
+
+        self.assertEqual(
+            move.document_type_id,
+            nfse,
+            "A fatura saiu no documento padrão da empresa, ignorando o "
+            "escolhido no ponto de venda.",
+        )

@@ -36,6 +36,21 @@ class PosOrder(models.Model):
         ``fiscal_line_ids``."""
         return "lines"
 
+    @api.depends("session_id", "fiscal_operation_id")
+    def _compute_document_type_id(self):
+        """Documento escolhido no ponto de venda, com o padrão da empresa atrás.
+
+        O mixin resolve só pela empresa, o que faz toda venda sair no mesmo
+        documento. Um balcão que vende serviço precisa de NFS-e sem que a
+        empresa inteira mude de padrão.
+        """
+        result = super()._compute_document_type_id()
+        for order in self:
+            document_type = order.session_id.config_id.out_pos_document_type_id
+            if document_type:
+                order.document_type_id = document_type
+        return result
+
     @api.depends("session_id")
     def _compute_fiscal_operation_id(self):
         for order in self:
@@ -56,7 +71,7 @@ class PosOrder(models.Model):
             return vals
 
         vals["fiscal_operation_id"] = operation.id
-        document_type = self.company_id.document_type_id
+        document_type = self.document_type_id or self.company_id.document_type_id
         if document_type:
             vals["document_type_id"] = document_type.id
             document_serie = document_type.get_document_serie(

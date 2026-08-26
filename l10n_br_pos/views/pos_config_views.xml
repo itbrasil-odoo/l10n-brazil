@@ -12,6 +12,7 @@
                     name="out_pos_fiscal_operation_id"
                     options="{'no_create': True}"
                 />
+                <field name="out_pos_document_type_id" options="{'no_create': True}" />
             </xpath>
         </field>
     </record>

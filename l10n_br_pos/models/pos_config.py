@@ -19,3 +19,11 @@ class PosConfig(models.Model):
         "que leva CFOP, CST e impostos à nota gerada a partir da venda; sem "
         "operação a fatura é lançada como documento não fiscal.",
     )
+
+    out_pos_document_type_id = fields.Many2one(
+        comodel_name="l10n_br_fiscal.document.type",
+        string="Documento Fiscal de Venda",
+        help="Documento emitido pelas vendas deste ponto de venda — NF-e num "
+        "balcão de mercadoria, NFS-e num de serviço. Vazio usa o documento "
+        "padrão da empresa.",
+    )
