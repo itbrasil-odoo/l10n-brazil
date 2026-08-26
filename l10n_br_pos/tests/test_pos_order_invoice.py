@@ -86,7 +86,7 @@ class TestPosOrderInvoice(TransactionCase):
             }
         )
 
-    def _sell(self, price=100.0, to_invoice=True, emit=False):
+    def _sell(self, price=100.0, to_invoice=True, emit=False, pay=True):
         """Uma venda de balcão paga, faturada ou não, como o PDV a produz."""
         session = self.env["pos.session"].create(
             {"config_id": self.config.id, "user_id": self.env.uid}
@@ -117,6 +117,8 @@ class TestPosOrderInvoice(TransactionCase):
                 ],
             }
         )
+        if not pay:
+            return order
         order.add_payment(
             {
                 "amount": price,
