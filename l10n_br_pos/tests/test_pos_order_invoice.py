@@ -339,3 +339,35 @@ class TestPosOrderEmit(TestPosOrderInvoice):
             "escrever em account.move — a venda terminaria em erro de "
             "permissão no lançamento de diário.",
         )
+
+
+@tagged("post_install", "-at_install")
+class TestPosOrderFiscalState(TestPosOrderInvoice):
+    """A situação do documento fiscal precisa chegar ao balcão."""
+
+    def test_state_reaches_the_order(self):
+        order = self._sell()
+        order.account_move.fiscal_document_id.write({"state_edoc": "autorizada"})
+        order.invalidate_recordset()
+
+        self.assertEqual(
+            order.fiscal_document_state,
+            "autorizada",
+            "O balcão não enxerga a situação do documento fiscal da venda.",
+        )
+
+    def test_state_change_is_pushed_to_open_sessions(self):
+        """Sem o empurrão, o caixa só descobre o resultado ao reabrir o PDV."""
+        order = self._sell()
+        empurrado = []
+        with patch.object(
+            type(self.env["pos.config"]),
+            "notify_synchronisation",
+            lambda cfg, session_id, login_number, records=None: empurrado.append(
+                records
+            ),
+        ):
+            order.account_move.fiscal_document_id.write({"state_edoc": "autorizada"})
+
+        self.assertTrue(empurrado, "A mudança de situação não foi enviada ao PDV.")
+        self.assertIn(order.id, (empurrado[0] or {}).get("pos.order", []))
