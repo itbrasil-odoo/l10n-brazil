@@ -371,3 +371,19 @@ class TestPosOrderFiscalState(TestPosOrderInvoice):
 
         self.assertTrue(empurrado, "A mudança de situação não foi enviada ao PDV.")
         self.assertIn(order.id, (empurrado[0] or {}).get("pos.order", []))
+
+    def test_authorized_document_exposes_its_report(self):
+        """O balcão precisa alcançar a DANFE para reimprimir a nota, não a fatura."""
+        order = self._sell()
+        doc = order.account_move.fiscal_document_id
+        anexo = self.env["ir.attachment"].create(
+            {"name": "danfe.pdf", "type": "binary", "datas": b"MQ=="}
+        )
+        doc.write({"state_edoc": "autorizada", "file_report_id": anexo.id})
+        order.invalidate_recordset()
+
+        self.assertEqual(
+            order.fiscal_document_report_id,
+            anexo,
+            "A venda não expõe o arquivo da nota autorizada.",
+        )
