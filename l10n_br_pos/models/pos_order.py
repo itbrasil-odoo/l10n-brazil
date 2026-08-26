@@ -24,6 +24,9 @@ class PosOrder(models.Model):
         compute="_compute_fiscal_operation_id",
         store=True,
         readonly=False,
+        # Sem precompute, todo campo precompute=True do mixin fiscal que depende
+        # da operação cai em cascata para computo pós-insert.
+        precompute=True,
         domain=lambda self: self._fiscal_operation_domain(),
     )
 
