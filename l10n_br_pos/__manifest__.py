@@ -5,7 +5,7 @@
     "name": "Ponto de venda adaptado à legislação brasileira",
     "summary": "Operação fiscal na venda de balcão, para que a fatura gerada "
     "pelo PDV seja um documento fiscal válido",
-    "version": "18.0.1.8.0",
+    "version": "18.0.1.9.0",
     "category": "Localization/Brazil",
     "license": "AGPL-3",
     "author": "KMEE, IT Brasil, Odoo Community Association (OCA)",
@@ -23,7 +23,7 @@
     ],
     "assets": {
         "point_of_sale._assets_pos": [
-            "l10n_br_pos/static/src/overrides/**/*",
+            "l10n_br_pos/static/src/**/*",
         ],
     },
     "installable": True,

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Copyright 2026 IT Brasil
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<templates id="template" xml:space="preserve">
+
+    <t t-name="l10n_br_pos.CardDataPopup">
+        <Dialog title="props.title">
+            <div class="mb-3">
+                <label class="form-label">Código de autorização (NSU)</label>
+                <input
+                    type="text"
+                    class="form-control form-control-lg"
+                    maxlength="20"
+                    t-model="state.card_authorization"
+                    placeholder="opcional"
+                />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Bandeira</label>
+                <select class="form-select form-select-lg" t-model="state.card_brand">
+                    <option value="">— não informada —</option>
+                    <t t-foreach="props.brands" t-as="brand" t-key="brand[0]">
+                        <option t-att-value="brand[0]">
+                            <t t-esc="brand[1]" />
+                        </option>
+                    </t>
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Parcelas (controle interno)</label>
+                <input
+                    type="number"
+                    min="0"
+                    class="form-control form-control-lg"
+                    t-model="state.installments"
+                    placeholder="opcional"
+                />
+            </div>
+            <t t-set-slot="footer">
+                <button
+                    class="btn btn-primary btn-lg lh-lg o-default-button"
+                    t-on-click="confirm"
+                >Aplicar</button>
+                <button
+                    class="btn btn-secondary btn-lg lh-lg o-default-button"
+                    t-on-click="() => this.props.close()"
+                >Descartar</button>
+            </t>
+        </Dialog>
+    </t>
+
+</templates>
