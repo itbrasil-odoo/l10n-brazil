@@ -98,3 +98,55 @@ class TestPosDetPag(TestPosOrderInvoice):
         self.assertEqual(len(detpag), 2)
         self.assertEqual(sorted(detpag.mapped("nfe40_tPag")), ["03", "17"])
         self.assertAlmostEqual(sum(detpag.mapped("nfe40_vPag")), 100.0, places=2)
+
+    def test_operator_without_nfe_rights_can_sell_with_card(self):
+        """Montar o grupo card não pode exigir direito de NF-e do caixa.
+
+        Quem opera o balcão não é gerente de NF-e, e o grupo card é um registro
+        do spec. O core já cria a fatura elevada; a montagem do payload precisa
+        do mesmo tratamento, senão a venda morre em "Você não tem permissões
+        para criar registros de nfe.40.card".
+        """
+        operador = (
+            self.env["res.users"]
+            .with_context(no_reset_password=True)
+            .create(
+                {
+                    "name": "Operadora de Caixa",
+                    "login": "caixa_detpag",
+                    "company_id": self.company.id,
+                    "company_ids": [Command.set([self.company.id])],
+                    "groups_id": [
+                        Command.set(
+                            [
+                                self.env.ref("base.group_user").id,
+                                self.env.ref("point_of_sale.group_pos_user").id,
+                            ]
+                        )
+                    ],
+                }
+            )
+        )
+        self.assertFalse(
+            operador.has_group("l10n_br_nfe.group_nfe_manager"),
+            "O teste perde o sentido se a operadora for gerente de NF-e.",
+        )
+
+        order = self._sell(pay=False)
+        order.add_payment(
+            {
+                "amount": 100.0,
+                "payment_method_id": self.payment_method.id,
+                "pos_order_id": order.id,
+            }
+        )
+        order.payment_ids[:1].write(
+            {"card_authorization": "112233", "card_brand": "01"}
+        )
+        order.action_pos_order_paid()
+
+        pedido = order.with_user(operador)
+        pedido.with_context(generate_pdf=False)._generate_pos_order_invoice()
+
+        card = order.account_move.fiscal_document_id.nfe40_detPag.nfe40_card
+        self.assertEqual(card.nfe40_cAut, "112233")
