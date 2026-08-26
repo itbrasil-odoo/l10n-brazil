@@ -202,10 +202,10 @@ class TestPosOrderInvoice(TransactionCase):
         self.assertIn(
             "Conta a Receber",
             message,
-            "O erro não diz qual configuração está faltando: %s" % message,
+            f"O erro não diz qual configuração está faltando: {message}",
         )
         self.assertIn(
             self.payment_method.name,
             message,
-            "O erro não diz qual meio de pagamento disparou: %s" % message,
+            f"O erro não diz qual meio de pagamento disparou: {message}",
         )
