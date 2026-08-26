@@ -23,6 +23,14 @@ class TestPosOrderInvoice(TransactionCase):
         super().setUpClass()
         cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
         cls.company = cls.env.ref("l10n_br_base.empresa_lucro_presumido")
+        # Estes testes medem a ponte entre a venda de balcão e a fatura, não a
+        # integração EDI. Com o processador "oca", postar a fatura confirma o
+        # documento e dispara o serializador da NF-e
+        # (_exec_before_SITUACAO_EDOC_A_ENVIAR → l10n_br_nfe._document_export),
+        # que quebra porque a operação de demonstração não define ICMS — falha
+        # de configuração fiscal do demo, não da ponte. "Sem Integração" tira o
+        # EDI do caminho; a transmissão é coberta à parte, com mock.
+        cls.company.processador_edoc = "nenhum"
         cls.fiscal_operation = cls.env.ref("l10n_br_fiscal.fo_venda")
         cls.env.user.company_ids = [Command.link(cls.company.id)]
         cls.env.user.company_id = cls.company
@@ -41,10 +49,11 @@ class TestPosOrderInvoice(TransactionCase):
             )
 
         cls.partner = cls.env["res.partner"].create({"name": "Cliente de Balcão"})
-        # Um produto de balcão realista: mercadoria para revenda, com NCM. Sem
-        # tipo fiscal nenhuma linha da operação casa, e a determinação devolve
-        # vazio — que é exatamente o que este teste precisa distinguir de uma
+        # Sem tipo fiscal nenhuma linha da operação casa e a determinação
+        # devolve vazio — que é o que estes testes precisam distinguir de uma
         # ponte quebrada.
+        #
+        # Mercadoria para revenda, que é o que um balcão vende.
         cls.product = cls.env["product.product"].create(
             {
                 "name": "Produto de Balcão",
