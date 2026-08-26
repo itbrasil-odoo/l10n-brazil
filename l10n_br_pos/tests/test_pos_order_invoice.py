@@ -2,6 +2,7 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
 from odoo import Command
+from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -74,8 +75,8 @@ class TestPosOrderInvoice(TransactionCase):
             }
         )
 
-    def _sell(self, price=100.0):
-        """Uma venda de balcão paga e faturada, como o PDV a produz."""
+    def _sell(self, price=100.0, to_invoice=True):
+        """Uma venda de balcão paga, faturada ou não, como o PDV a produz."""
         session = self.env["pos.session"].create(
             {"config_id": self.config.id, "user_id": self.env.uid}
         )
@@ -85,7 +86,7 @@ class TestPosOrderInvoice(TransactionCase):
                 "session_id": session.id,
                 "company_id": self.company.id,
                 "partner_id": self.partner.id,
-                "to_invoice": True,
+                "to_invoice": to_invoice,
                 "amount_tax": 0.0,
                 "amount_total": price,
                 "amount_paid": price,
@@ -112,7 +113,8 @@ class TestPosOrderInvoice(TransactionCase):
             }
         )
         order.action_pos_order_paid()
-        order.with_context(generate_pdf=False)._generate_pos_order_invoice()
+        if to_invoice:
+            order.with_context(generate_pdf=False)._generate_pos_order_invoice()
         return order
 
     def test_invoice_from_pos_sale_is_a_fiscal_document(self):
@@ -177,4 +179,33 @@ class TestPosOrderInvoice(TransactionCase):
             nfse,
             "A fatura saiu no documento padrão da empresa, ignorando o "
             "escolhido no ponto de venda.",
+        )
+
+    def test_missing_pos_receivable_account_says_what_to_configure(self):
+        """Sem conta a receber do PDV, o erro precisa dizer o que configurar.
+
+        O plano de contas brasileiro base (``br_oca``) não traz conta a receber
+        nenhuma, então a empresa fica sem
+        ``account_default_pos_receivable_account_id``. O ponto de venda monta a
+        linha de recebível sem conta e o fechamento da sessão morre com uma
+        violação de not-null no banco — que chega ao operador do caixa como
+        "Conta necessária ausente na linha contábil", sem dizer onde mexer.
+        """
+        self.company.account_default_pos_receivable_account_id = False
+        self.payment_method.receivable_account_id = False
+        order = self._sell(to_invoice=False)
+
+        with self.assertRaises(UserError) as caught:
+            order.session_id.action_pos_session_close()
+
+        message = str(caught.exception)
+        self.assertIn(
+            "Conta a Receber",
+            message,
+            "O erro não diz qual configuração está faltando: %s" % message,
+        )
+        self.assertIn(
+            self.payment_method.name,
+            message,
+            "O erro não diz qual meio de pagamento disparou: %s" % message,
         )
