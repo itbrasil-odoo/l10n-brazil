@@ -71,6 +71,29 @@ class PosOrderLine(models.Model):
         self.ensure_one()
         return self.order_id
 
+    def _get_total_for_tax_totals(self):
+        """O total do documento a que esta linha pertence.
+
+        ``l10n_br_account._get_tax_totals_summary`` decide se a linha é fiscal
+        olhando ``fiscal_operation_line_id`` e, quando é, chama este método —
+        dois atributos diferentes, e o contrato entre eles nunca foi escrito.
+        Até este módulo existir ele se sustentava por coincidência: todo modelo
+        que ganhava o mixin de linha fiscal (``account.move.line``,
+        ``sale.order.line``, ``purchase.order.line``) também implementava o
+        método.
+
+        ``pos.order.line`` foi o primeiro a ter um sem o outro, e o resultado
+        era a tela de pagamento do balcão morrer com ``'pos.order.line' object
+        has no attribute '_get_total_for_tax_totals'`` — no meio da venda, com
+        o troco já na tela.
+
+        Sem ``@api.model``, ao contrário das três implementações irmãs: o método
+        lê ``self.order_id``, então opera sobre registros, e o decorador ali é
+        engano herdado por cópia.
+        """
+        self.ensure_one()
+        return self.order_id.amount_total
+
     @api.depends("order_id.fiscal_operation_id")
     def _compute_fiscal_operation_id(self):
         for line in self:

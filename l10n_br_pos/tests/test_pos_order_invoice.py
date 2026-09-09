@@ -224,6 +224,55 @@ class TestPosOrderInvoice(TransactionCase):
             f"O erro não diz qual meio de pagamento disparou: {message}",
         )
 
+    def test_line_answers_the_document_total_for_tax_totals(self):
+        """A linha do balcão responde pelo total do documento, como as outras.
+
+        Regressão de um erro que derrubava a tela de pagamento com
+        ``'pos.order.line' object has no attribute
+        '_get_total_for_tax_totals'``.
+
+        A causa está em ``l10n_br_account._get_tax_totals_summary``, que decide
+        se a linha é fiscal olhando ``fiscal_operation_line_id`` e em seguida
+        chama ``_get_total_for_tax_totals()`` — dois atributos diferentes, com
+        um contrato entre eles que nunca foi escrito. Ele se sustentava por
+        coincidência: até este módulo existir, todo modelo que ganhava o mixin
+        de linha fiscal (``account.move.line``, ``sale.order.line``,
+        ``purchase.order.line``) também implementava o método. ``pos.order.line``
+        foi o primeiro a ter um sem o outro.
+        """
+        order = self._sell(to_invoice=False)
+
+        self.assertEqual(
+            order.lines[:1]._get_total_for_tax_totals(),
+            order.amount_total,
+        )
+
+    def test_tax_totals_summary_survives_a_counter_sale(self):
+        """O caminho exato que quebrava, na mesma sequência do núcleo.
+
+        Vale mais que o teste acima: é ele que exercita o chamador de verdade
+        (``pos.order._compute_amount_all``, point_of_sale/models/pos_order.py),
+        e falharia de novo se alguém removesse o método achando-o órfão.
+
+        As três chamadas de preparação não são cerimônia: sem
+        ``_add_tax_details_in_base_lines`` o resumo do núcleo morre antes de
+        chegar ao trecho brasileiro, com ``KeyError: 'tax_details'``, e o teste
+        passaria a medir outra coisa.
+        """
+        order = self._sell(to_invoice=False)
+        imposto = self.env["account.tax"]
+        base_lines = order.lines._prepare_tax_base_line_values()
+        imposto._add_tax_details_in_base_lines(base_lines, order.company_id)
+        imposto._round_base_lines_tax_details(base_lines, order.company_id)
+
+        resumo = imposto._get_tax_totals_summary(
+            base_lines=base_lines,
+            currency=order.currency_id,
+            company=order.company_id,
+        )
+
+        self.assertIn("formatted_amount_total", resumo)
+
 
 @tagged("post_install", "-at_install")
 class TestPosOrderEmit(TestPosOrderInvoice):
