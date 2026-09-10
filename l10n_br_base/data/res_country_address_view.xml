@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright (C) 2026 - TODAY  IT Brasil
+     License AGPL-3 - See http://www.gnu.org/licenses/agpl-3.0.html -->
+<odoo>
+    <!-- base.br is noupdate from the `base` module, so _load_records skips a
+         <record> of ours on upgrade. Only a function tag gets through, and it
+         has to: address_view_id is ON DELETE SET NULL, so recreating the view
+         clears it silently and nothing puts it back. -->
+    <function
+        model="res.country"
+        name="write"
+        eval="[[ref('base.br')], {'address_view_id': ref('l10n_br_base_res_partner_address')}]"
+    />
+</odoo>
