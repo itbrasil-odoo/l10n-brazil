@@ -6,11 +6,14 @@ from datetime import datetime
 
 from dateutil.relativedelta import relativedelta
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 from ..constants.fiscal import (
     COMMENT_TYPE,
     COMMENT_TYPE_COMMERCIAL,
+    FISCAL_COMMENT_DOCUMENT_MODEL,
+    FISCAL_COMMENT_LINE_MODEL,
     FISCAL_COMMENT_OBJECTS,
 )
 
@@ -56,9 +59,25 @@ class Comment(models.Model):
 
     object_id = fields.Reference(
         string="Reference",
-        selection=FISCAL_COMMENT_OBJECTS,
-        ondelete="set null",
+        selection="_selection_object_id",
+        help="Record the Test Message button renders this comment against.",
     )
+
+    @api.model
+    def _selection_object_id(self):
+        """Models offered as the test reference.
+
+        The ``object`` field classifies the comment through the abstract
+        document mixins, but a Reference needs a model one can browse:
+        pointing it at the mixins leaves the field impossible to fill, and
+        every template using ``doc`` then fails on the Test button. So offer
+        the concrete models whose ``_document_comment()`` actually renders
+        these templates.
+        """
+        return [
+            (FISCAL_COMMENT_DOCUMENT_MODEL, _("Fiscal Document")),
+            (FISCAL_COMMENT_LINE_MODEL, _("Fiscal Document Line")),
+        ]
 
     @api.model
     def _search_display_name(self, operator, value):
@@ -154,6 +173,23 @@ class Comment(models.Model):
             comments.append(template.render(vals))
         return " - ".join(comments)
 
+    def _test_message_vals(self):
+        """Mirror what ``_document_comment()`` renders with, so that testing a
+        comment shows what the document will really carry."""
+        self.ensure_one()
+        vals = {"user": self.env.user, "ctx": self._context}
+        if self.object_id._name == FISCAL_COMMENT_LINE_MODEL:
+            # l10n_br_fiscal.document.line._document_comment
+            vals.update({"doc": self.object_id.document_id, "item": self.object_id})
+        else:
+            # l10n_br_fiscal.document._document_comment
+            vals["doc"] = self.object_id
+        return vals
+
     def action_test_message(self):
-        vals = {"user": self.env.user, "ctx": self._context, "doc": self.object_id}
-        self.test_comment = self.compute_message(vals)
+        self.ensure_one()
+        if not self.object_id:
+            raise UserError(
+                _("Select a reference record to test this message against.")
+            )
+        self.test_comment = self.compute_message(self._test_message_vals())
