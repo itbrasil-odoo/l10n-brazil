@@ -110,6 +110,25 @@ class AccountMove(models.Model):
         if "proxy_user_id" not in vals and "invoice_user_id" in vals:
             vals["proxy_user_id"] = vals["invoice_user_id"]
 
+    def _sync_proxy_user_id(self):
+        """Carry the salesperson over to the fiscal document.
+
+        invoice_user_id is not a default: it is a stored compute
+        (_compute_invoice_default_sale_person, on move_type and partner_id)
+        that resolves the partner's salesperson, then the current user, then
+        create_uid. It therefore lands *after* _sync_proxy_fields_vals has read
+        the create vals, and it lands again whenever the partner changes. Only
+        the invoices that spelled invoice_user_id out in the vals were reaching
+        the document, and templates reading ``doc.user_id`` rendered an empty
+        recordset into the NF-e for all the others.
+
+        An invoice left deliberately without a salesperson keeps the document
+        without one too, so False is never propagated over an existing value.
+        """
+        for move in self:
+            if move.invoice_user_id and move.proxy_user_id != move.invoice_user_id:
+                move.proxy_user_id = move.invoice_user_id
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -121,7 +140,9 @@ class AccountMove(models.Model):
                 or self.env.context.get("force_fiscal_amount_recompute")
             ):
                 vals.pop("tax_totals")
-        return super().create(vals_list)
+        moves = super().create(vals_list)
+        moves._sync_proxy_user_id()
+        return moves
 
     def write(self, vals):
         self._sync_proxy_fields_vals(vals)
@@ -135,6 +156,9 @@ class AccountMove(models.Model):
         res = super().write(vals)
         if "partner_id" in vals:
             self._onchange_ind_final()
+        if {"partner_id", "move_type", "invoice_user_id"} & vals.keys():
+            # the salesperson may have just been recomputed
+            self._sync_proxy_user_id()
         return res
 
     def _inverse_tax_totals(self):
