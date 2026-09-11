@@ -514,6 +514,13 @@ FISCAL_COMMENT_DOCUMENT = "l10n_br_fiscal.document.mixin"
 
 FISCAL_COMMENT_LINE = "l10n_br_fiscal.document.line.mixin"
 
+# Concrete counterparts of the mixins above. FISCAL_COMMENT_OBJECTS classifies
+# a comment, and abstract models serve that fine; the Test Message reference
+# needs models one can actually browse.
+FISCAL_COMMENT_DOCUMENT_MODEL = "l10n_br_fiscal.document"
+
+FISCAL_COMMENT_LINE_MODEL = "l10n_br_fiscal.document.line"
+
 EVENT_ENV_PROD = "prod"
 EVENT_ENV_HML = "hml"
 
