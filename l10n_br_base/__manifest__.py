@@ -10,7 +10,7 @@
     "maintainers": ["renatonlima", "rvalyi"],
     "website": "https://github.com/OCA/l10n-brazil",
     "depends": ["base", "base_setup", "base_address_extended"],
-    "version": "18.0.2.1.1",
+    "version": "18.0.2.1.2",
     "data": [
         "security/ir.model.access.csv",
         "data/res.city.csv",
@@ -19,6 +19,7 @@
         "views/res_partner_address_view.xml",
         "views/res_config_settings_view.xml",
         "data/res_country_data.xml",
+        "data/res_country_address_view.xml",
         "views/res_city_view.xml",
         "views/res_bank_view.xml",
         "views/res_partner_bank_view.xml",
