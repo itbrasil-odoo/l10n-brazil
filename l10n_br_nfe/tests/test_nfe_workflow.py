@@ -18,11 +18,11 @@ No network access: every SEFAZ round trip goes through the XML fixtures under
 ``tests/mocks`` via the shared ``nfe_mock`` helper.
 """
 
+import importlib.resources
 from types import SimpleNamespace
 from unittest import mock
 
 import nfelib
-import pkg_resources
 from erpbrasil.assinatura import misc
 from nfelib.nfe.bindings.v4_0.leiaute_nfe_v4_00 import TnfeProc
 
@@ -296,21 +296,23 @@ class TestNFeWorkflowXmlValidation(TransactionCase):
         self.assertEqual(self.document.state_edoc, SITUACAO_EDOC_A_ENVIAR)
         self.assertIn("CEP", self.document.xml_error_message)
 
-    def test_invalid_xml_blocks_transmission_without_error(self):
-        """With xml_error_message set, sending is a silent no-op (no SEFAZ call)."""
+    def test_invalid_xml_blocks_transmission_and_holds_a_enviar(self):
+        """With xml_error_message set, sending is refused and the state holds."""
         self._break_partner_zip()
         self.document.action_document_confirm()
         self.assertTrue(self.document.xml_error_message)
 
         recorder = RecordingNFeMock(NFE_ASYNC_AUTHORIZED)
-        with recorder:
+        with recorder, self.assertRaises(UserError):
             self.document.action_document_send()
 
-        # FSM transitions to enviada via the Machine before the NFe
-        # _eletronic_document_send runs. The NFe module then returns
-        # early because xml_error_message is set, skipping transmission.
+        # _before_document_send vetoes the transition, so the machine never
+        # writes 'enviada'. Before this guard the document was moved to
+        # 'enviada' first and only then did _eletronic_document_send() skip
+        # the transmission, stranding it in a state that action_draft_fsm
+        # did not accept as a source.
         self.assertEqual(recorder.calls, [])
-        self.assertEqual(self.document.state_edoc, SITUACAO_EDOC_ENVIADA)
+        self.assertEqual(self.document.state_edoc, SITUACAO_EDOC_A_ENVIAR)
         self.assertIn("CEP", self.document.xml_error_message)
 
     def test_invalid_xml_recovery_via_back2draft(self):
@@ -399,10 +401,12 @@ class TestNFeWorkflowImportedDocument(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
-        nfe_stream = pkg_resources.resource_stream(
-            nfelib.__name__, "/".join(NFELIB_SAMPLE)
+        binding = TnfeProc.from_xml(
+            importlib.resources.files(nfelib.__name__)
+            .joinpath(*NFELIB_SAMPLE)
+            .read_bytes()
+            .decode()
         )
-        binding = TnfeProc.from_xml(nfe_stream.read().decode())
         cls.imported = cls.env["l10n_br_fiscal.document"].import_binding_nfe(
             binding, edoc_type="in", dry_run=False
         )
