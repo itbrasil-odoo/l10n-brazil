@@ -1,10 +1,11 @@
 [project]
 name = "odoo-addons-oca-l10n-brazil"
-version = "18.0.20260811.0"
+version = "18.0.20260910.0"
 dependencies = [
     "odoo-addon-l10n_br_account==18.0.*",
     "odoo-addon-l10n_br_account_due_list==18.0.*",
     "odoo-addon-l10n_br_account_fleet==18.0.*",
+    "odoo-addon-l10n_br_account_nfe==18.0.*",
     "odoo-addon-l10n_br_account_payment_order==18.0.*",
     "odoo-addon-l10n_br_base==18.0.*",
     "odoo-addon-l10n_br_base_l10n_br_compat==18.0.*",
@@ -16,6 +17,8 @@ dependencies = [
     "odoo-addon-l10n_br_crm_cnpj_search==18.0.*",
     "odoo-addon-l10n_br_cte_spec==18.0.*",
     "odoo-addon-l10n_br_currency_rate_update==18.0.*",
+    "odoo-addon-l10n_br_delivery==18.0.*",
+    "odoo-addon-l10n_br_delivery_nfe==18.0.*",
     "odoo-addon-l10n_br_fiscal==18.0.*",
     "odoo-addon-l10n_br_fiscal_certificate==18.0.*",
     "odoo-addon-l10n_br_fiscal_closing==18.0.*",
@@ -31,6 +34,7 @@ dependencies = [
     "odoo-addon-l10n_br_nfe_spec==18.0.*",
     "odoo-addon-l10n_br_nfse==18.0.*",
     "odoo-addon-l10n_br_nfse_focus==18.0.*",
+    "odoo-addon-l10n_br_nfse_paulistana==18.0.*",
     "odoo-addon-l10n_br_portal==18.0.*",
     "odoo-addon-l10n_br_purchase==18.0.*",
     "odoo-addon-l10n_br_purchase_blanket_order==18.0.*",
