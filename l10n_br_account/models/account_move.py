@@ -156,6 +156,7 @@ class AccountMove(models.Model):
         res = super().write(vals)
         if "partner_id" in vals:
             self._onchange_ind_final()
+            self._sync_fiscal_lines_partner()
         if {"partner_id", "move_type", "invoice_user_id"} & vals.keys():
             # the salesperson may have just been recomputed
             self._sync_proxy_user_id()
@@ -183,6 +184,30 @@ class AccountMove(models.Model):
     def _onchange_partner_id_br(self):
         if self.fiscal_document_id:
             self.fiscal_document_id.partner_id = self.partner_id
+        self._sync_fiscal_lines_partner()
+
+    def _sync_fiscal_lines_partner(self):
+        """Move the fiscal lines to the new customer of the invoice.
+
+        The fiscal line partner is ``proxy_partner_id or document_id.partner_id``
+        and the invoice line views seed ``proxy_partner_id`` with the commercial
+        partner (force_save), so a line keeps the partner it was created with.
+        The document's own ``_inverse_partner_id`` would push the new partner
+        down, but here the document's partner_id is a related of
+        proxy_partner_id, which replaces that inverse. Without this, changing the
+        customer left the lines on the old partner and CFOP and taxes kept being
+        mapped for it (an interstate CFOP after switching to an in-state
+        customer, rejected by SEFAZ with "idDest <> 2").
+        """
+        for move in self:
+            lines = move.invoice_line_ids.filtered(
+                lambda line: (
+                    line.display_type == "product"
+                    and line.proxy_partner_id != move.commercial_partner_id
+                )
+            )
+            for line in lines:
+                line.proxy_partner_id = move.commercial_partner_id
 
     @api.constrains("fiscal_document_id", "document_type_id")
     def _check_fiscal_document_type(self):

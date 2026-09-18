@@ -873,3 +873,88 @@ class TestMoveEdition(TransactionCase):
         fiscal_line = move.fiscal_line_ids[0]
         self.assertEqual(move.ind_final, "0")
         self.assertEqual(fiscal_line.ind_final, "0")
+
+    def _saved_fiscal_invoice(self, partner):
+        move_form = self._create_fiscal_invoice_form(partner)
+        with move_form.invoice_line_ids.new() as line_form:
+            line_form.product_id = self.product_id
+            line_form.price_unit = 100.0
+            line_form.quantity = 1.0
+        latam_doc_type = "l10n_latam.document.type" in self.env and self.env[
+            "l10n_latam.document.type"
+        ].search(
+            [
+                ("code", "=", "55"),
+                ("country_id", "=", self.env.ref("base.br").id),
+            ],
+            limit=1,
+        )
+        if latam_doc_type and move_form.l10n_latam_use_documents:
+            move_form.l10n_latam_document_type_id = latam_doc_type
+        return move_form.save()
+
+    def test_fiscal_line_partner_follows_partner_change(self):
+        """Changing the customer of a saved invoice must move its fiscal lines
+        to the new partner, so CFOP and taxes are mapped for it. The fiscal
+        lines used to keep the old partner: an invoice started for an
+        out-of-state customer kept an interstate CFOP after switching to an
+        in-state one, and SEFAZ rejected it ("CFOP de operação interestadual e
+        idDest <> 2")."""
+        self._setup_fiscal_user()
+        partner_pe = self.env.ref("l10n_br_base.res_partner_cliente5_pe")
+        partner_sp = self.env.ref("l10n_br_base.res_partner_cliente1_sp")
+
+        move = self._saved_fiscal_invoice(partner_pe)
+        fiscal_line = move.fiscal_line_ids[0]
+        self.assertEqual(fiscal_line.partner_id, partner_pe)
+        self.assertEqual(fiscal_line.cfop_id.code[:1], "6")
+
+        move.write({"partner_id": partner_sp.id})
+        self.assertEqual(fiscal_line.partner_id, partner_sp)
+        self.assertEqual(fiscal_line.cfop_id.code[:1], "5")
+
+    def test_fiscal_line_partner_follows_form_partner_change(self):
+        """Same as above, through the invoice form."""
+        self._setup_fiscal_user()
+        partner_pe = self.env.ref("l10n_br_base.res_partner_cliente5_pe")
+        partner_sp = self.env.ref("l10n_br_base.res_partner_cliente1_sp")
+
+        move = self._saved_fiscal_invoice(partner_pe)
+        with Form(move) as move_form:
+            move_form.partner_id = partner_sp
+        fiscal_line = move.fiscal_line_ids[0]
+        self.assertEqual(fiscal_line.partner_id, partner_sp)
+        self.assertEqual(fiscal_line.cfop_id.code[:1], "5")
+
+    def test_fiscal_line_partner_follows_partner_change_created_by_code(self):
+        """Invoices created by code (e.g. from a sale order) carry no proxy
+        partner on their lines; they must follow the new customer as well."""
+        self._setup_fiscal_user()
+        partner_pe = self.env.ref("l10n_br_base.res_partner_cliente5_pe")
+        partner_sp = self.env.ref("l10n_br_base.res_partner_cliente1_sp")
+        fiscal_operation = self.env.ref("l10n_br_fiscal.fo_venda")
+
+        move = self.env["account.move"].create(
+            {
+                "move_type": "out_invoice",
+                "partner_id": partner_pe.id,
+                "fiscal_operation_id": fiscal_operation.id,
+                "document_type_id": self.env.ref("l10n_br_fiscal.document_55").id,
+                "invoice_line_ids": [
+                    Command.create(
+                        {
+                            "product_id": self.product_id.id,
+                            "quantity": 1.0,
+                            "price_unit": 100.0,
+                            "fiscal_operation_id": fiscal_operation.id,
+                        }
+                    )
+                ],
+            }
+        )
+        fiscal_line = move.fiscal_line_ids[0]
+        self.assertEqual(fiscal_line.cfop_id.code[:1], "6")
+
+        move.write({"partner_id": partner_sp.id})
+        self.assertEqual(fiscal_line.partner_id, partner_sp)
+        self.assertEqual(fiscal_line.cfop_id.code[:1], "5")
