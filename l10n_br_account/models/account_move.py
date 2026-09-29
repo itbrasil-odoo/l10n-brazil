@@ -3,6 +3,7 @@
 # Copyright (C) 2020 - TODAY Luis Felipe Mileo - KMEE
 # License AGPL-3 - See http://www.gnu.org/licenses/agpl-3.0.html
 
+from collections import defaultdict
 from contextlib import contextmanager
 
 from odoo import api, fields, models
@@ -532,6 +533,106 @@ class AccountMove(models.Model):
         with super()._sync_tax_lines(container):
             yield
         self._sync_fiscal_product_amounts(container)
+        self._sync_tax_lines_from_fiscal(container)
+
+    def _sync_tax_lines_from_fiscal(self, container):
+        """Bring the tax lines in line with the fiscal amounts.
+
+        The native _sync_tax_lines only recomputes the tax lines when a field
+        it tracks on a base line changes during the sync: the grouping key
+        (account, taxes, partner...), price_unit, quantity and discount. The
+        Brazilian tax engine (_add_br_tax_details_in_base_line) reads the
+        amounts from the fiscal document line instead, and those change on
+        their own: the CFOP turning internal and the ICMS going from 4% to 18%,
+        a new fiscal operation line, the fiscal line recomputed from the fiscal
+        document. The product line follows the new fiscal amount
+        (_sync_fiscal_product_amounts) while the tax lines kept the old one,
+        and the next save of the invoice failed with "The entry is not
+        balanced" by the difference.
+
+        Same steps as the native method, for every draft invoice with a fiscal
+        operation; lines are only written when their amounts differ. Imported
+        documents keep the tax values of their XML, and tax lines whose amount
+        was set by hand in this transaction (protected) are kept, as the
+        native method does.
+        """
+        if self.env.context.get("force_fiscal_amount_recompute"):
+            return
+        moves = container["records"].filtered(
+            lambda move: move.state == "draft"
+            and move.fiscal_operation_id
+            and not move.imported_document
+            and move.is_invoice(True)
+        )
+        if not moves:
+            return
+        AccountTax = self.env["account.tax"]
+        to_delete, to_create = [], []
+        grouped_update = defaultdict(set)
+
+        def needs_write(line, values):
+            return any(
+                line._fields[fname].convert_to_write(line[fname], line) != value
+                for fname, value in values.items()
+            )
+
+        for move in moves:
+            tax_lines = move.line_ids.filtered("tax_repartition_line_id")
+            fiscal_lines = move.line_ids.filtered(
+                lambda line: line.display_type == "product"
+                and line.fiscal_document_line_id
+            )
+            # Cheap check first: the full recompute costs as much as the rest
+            # of the sync. Equal totals is the case of every save that did not
+            # touch the fiscal amounts.
+            if not move.currency_id.compare_amounts(
+                abs(sum(tax_lines.mapped("amount_currency"))),
+                sum(fiscal_lines.mapped("amount_tax_included"))
+                + sum(fiscal_lines.mapped("amount_tax_not_included")),
+            ):
+                continue
+            if any(
+                self.env.is_protected(line._fields[fname], line)
+                for line in tax_lines
+                for fname in ("amount_currency", "balance")
+            ):
+                continue
+            base_lines_values, tax_lines_values = move._get_rounded_base_and_tax_lines(
+                round_from_tax_lines=False
+            )
+            AccountTax._add_accounting_data_in_base_lines_tax_details(
+                base_lines_values,
+                move.company_id,
+                include_caba_tags=move.always_tax_exigible,
+            )
+            tax_results = AccountTax._prepare_tax_lines(
+                base_lines_values, move.company_id, tax_lines=tax_lines_values
+            )
+            # Only the tax lines: the base_lines_to_update would put back the
+            # native amount (the price) on the product lines, over the fiscal
+            # amount that _sync_fiscal_product_amounts has just written.
+            for tax_line_vals in tax_results["tax_lines_to_delete"]:
+                to_delete.append(tax_line_vals["record"].id)
+            for tax_line_vals in tax_results["tax_lines_to_add"]:
+                to_create.append(
+                    {**tax_line_vals, "display_type": "tax", "move_id": move.id}
+                )
+            for tax_line_vals, _grouping_key, to_update in tax_results[
+                "tax_lines_to_update"
+            ]:
+                line = tax_line_vals["record"]
+                if needs_write(line, to_update):
+                    grouped_update[line.currency_id.id, frozendict(to_update)].add(
+                        line.id
+                    )
+
+        MoveLine = self.env["account.move.line"]
+        for (_currency_id, values), line_ids in grouped_update.items():
+            MoveLine.browse(line_ids).write(dict(values))
+        if to_delete:
+            MoveLine.browse(to_delete).with_context(dynamic_unlink=True).unlink()
+        if to_create:
+            MoveLine.create(to_create)
 
     def _sync_fiscal_product_amounts(self, container):
         moves = container["records"].filtered(
