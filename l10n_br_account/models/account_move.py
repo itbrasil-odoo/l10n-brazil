@@ -133,12 +133,28 @@ class AccountMove(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             self._sync_proxy_fields_vals(vals)
+            # Prevent Odoo's tax_totals widget from obliterating the fiscal
+            # tax values: it adds every tax on top of the base, while ICMS, II,
+            # PIS and COFINS are already inside the price of a fiscal document.
+            if "tax_totals" in vals and (
+                vals.get("fiscal_operation_id")
+                or vals.get("imported_document")
+                or self.env.context.get("force_fiscal_amount_recompute")
+            ):
+                vals.pop("tax_totals")
         moves = super().create(vals_list)
         moves._sync_proxy_user_id()
         return moves
 
     def write(self, vals):
         self._sync_proxy_fields_vals(vals)
+        # Pop tax_totals to prevent Odoo from overriding our tax lines on save
+        if "tax_totals" in vals and (
+            any(self.mapped("fiscal_operation_id"))
+            or any(self.mapped("imported_document"))
+            or self.env.context.get("force_fiscal_amount_recompute")
+        ):
+            vals.pop("tax_totals")
         res = super().write(vals)
         if "partner_id" in vals:
             self._onchange_ind_final()
@@ -146,6 +162,18 @@ class AccountMove(models.Model):
             # the salesperson may have just been recomputed
             self._sync_proxy_user_id()
         return res
+
+    def _inverse_tax_totals(self):
+        # Never let the tax_totals widget override the tax values of a fiscal
+        # document: the widget's total is the base plus every tax, so applying
+        # it rebuilds the payment term line from a total that no longer matches
+        # the fiscal one and the entry stops balancing.
+        if self.env.context.get("force_fiscal_amount_recompute"):
+            return
+        moves = self.filtered(
+            lambda move: not move.fiscal_operation_id and not move.imported_document
+        )
+        return super(AccountMove, moves)._inverse_tax_totals()
 
     @api.onchange("company_id")
     def _onchange_company_id_br(self):
@@ -466,13 +494,19 @@ class AccountMove(models.Model):
         """
         protected = set()
         for fname in vals:
+            if fname == "tax_totals":
+                # Skip protecting tax_totals since it is updated explicitly
+                # after create/write, same as the native override this one
+                # replaces. Protecting it here freezes the whole group of
+                # computed fields sharing its @api.depends, including the
+                # totals the accounting engine needs to recompute to keep the
+                # entry balanced.
+                continue
             if (
                 records._name == "account.move"
                 and records.fiscal_document_id
                 and records.fiscal_document_id._fields.get(fname)
-            ):
-                continue
-            elif (
+            ) or (
                 records._name == "account.move.line"
                 and records.fiscal_document_line_id
                 and records.fiscal_document_line_id._fields.get(fname)
@@ -492,6 +526,35 @@ class AccountMove(models.Model):
         with super()._sync_dynamic_lines(container):
             yield
         self.update_payment_term_number()
+
+    @contextmanager
+    def _sync_tax_lines(self, container):
+        with super()._sync_tax_lines(container):
+            yield
+        self._sync_fiscal_product_amounts(container)
+
+    def _sync_fiscal_product_amounts(self, container):
+        moves = container["records"].filtered(
+            lambda move: move.fiscal_operation_id and move.is_invoice(True)
+        )
+        lines = moves.line_ids.filtered(lambda line: line.display_type == "product")
+        amount_currency_field = lines._fields["amount_currency"]
+        for line in lines:
+            if self.env.is_protected(amount_currency_field, line):
+                continue
+            amount_currency = (
+                line._fiscal_unsigned_amount_currency() * line.move_id.direction_sign
+            )
+            if line.currency_id.compare_amounts(line.amount_currency, amount_currency):
+                line.amount_currency = amount_currency
+            if line.currency_id == line.company_id.currency_id:
+                if line.company_id.currency_id.compare_amounts(
+                    line.balance, amount_currency
+                ):
+                    line.balance = amount_currency
+        if lines:
+            self.env.add_to_compute(lines._fields["debit"], lines)
+            self.env.add_to_compute(lines._fields["credit"], lines)
 
     def update_payment_term_number(self):
         payment_term_lines = self.line_ids.filtered(
