@@ -5,7 +5,7 @@
 
 from contextlib import contextmanager
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from odoo.tools import frozendict
 
@@ -17,6 +17,7 @@ from odoo.addons.l10n_br_fiscal.constants.fiscal import (
     FISCAL_IN_OUT_ALL,
     FISCAL_OUT,
     MODELO_FISCAL_NFE,
+    SITUACAO_EDOC_DENEGADA,
 )
 
 from .constants import (
@@ -133,10 +134,12 @@ class AccountMove(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             self._sync_proxy_fields_vals(vals)
-            # Prevent Odoo's tax_totals widget from obliterating our
-            # exact XML tax calculations
+            # Prevent Odoo's tax_totals widget from obliterating the fiscal
+            # tax values: it adds every tax on top of the base, while ICMS, II,
+            # PIS and COFINS are already inside the price of a fiscal document.
             if "tax_totals" in vals and (
-                vals.get("imported_document")
+                vals.get("fiscal_operation_id")
+                or vals.get("imported_document")
                 or self.env.context.get("force_fiscal_amount_recompute")
             ):
                 vals.pop("tax_totals")
@@ -148,7 +151,8 @@ class AccountMove(models.Model):
         self._sync_proxy_fields_vals(vals)
         # Pop tax_totals to prevent Odoo from overriding our tax lines on save
         if "tax_totals" in vals and (
-            any(self.mapped("imported_document"))
+            any(self.mapped("fiscal_operation_id"))
+            or any(self.mapped("imported_document"))
             or self.env.context.get("force_fiscal_amount_recompute")
         ):
             vals.pop("tax_totals")
@@ -163,16 +167,20 @@ class AccountMove(models.Model):
         return res
 
     def _inverse_tax_totals(self):
-        # Never let the tax_totals widget override the exact tax values
-        # of an imported fiscal document.
+        # Never let the tax_totals widget override the tax values of a fiscal
+        # document: the widget's total is the base plus every tax, so applying
+        # it rebuilds the payment term line from a total that no longer matches
+        # the fiscal one and the entry stops balancing.
         if self.env.context.get("force_fiscal_amount_recompute"):
             # Import flow: the move is still being assembled and
             # imported_document may not be written yet, so skip the
             # inverse for the whole batch.
             return
         # Regular (UI) flow: run the standard inverse only for the moves
-        # that are not the mirror of an imported fiscal document.
-        moves = self.filtered(lambda move: not move.imported_document)
+        # that carry no fiscal document.
+        moves = self.filtered(
+            lambda move: not move.fiscal_operation_id and not move.imported_document
+        )
         return super(AccountMove, moves)._inverse_tax_totals()
 
     @api.onchange("company_id")
@@ -293,10 +301,15 @@ class AccountMove(models.Model):
         if view_type == "form" and self.env.company.country_id.code == "BR":
             arch = self.env["l10n_br_fiscal.document.line"].inject_fiscal_fields(arch)
 
+        # The Brazilian footer already shows the document totals computed by the
+        # fiscal engine. The native widget recomputes them with its own rules and
+        # adds the price included taxes (ICMS, PIS, COFINS, IBS, CBS) on top of a
+        # subtotal that already carries them, so it must not be displayed.
+        # "attrs" was dropped in Odoo 17.0: the modifier is now a plain attribute.
         for tax_totals_node in arch.xpath(
             "//field[@name='tax_totals'][@widget='account-tax-totals-field']"
         ):
-            tax_totals_node.set("attrs", "{'invisible': True}")
+            tax_totals_node.set("invisible", "1")
 
         if view_type == "form" and (
             self.env.user.has_group("l10n_br_account.group_line_fiscal_detail")
@@ -378,15 +391,21 @@ class AccountMove(models.Model):
         for move in self.filtered(
             lambda m: m.document_type_id and not m.l10n_latam_document_type_id
         ):
-            latam_doc_type = self.env["l10n_latam.document.type"].search(
-                [
-                    ("code", "=", move.document_type_id.code),
-                    ("country_id", "=", move.company_id.account_fiscal_country_id.id),
-                ],
-                limit=1,
+            latam_doc_type = self._find_latam_document_type(
+                move.document_type_id, move.company_id
             )
             if latam_doc_type:
                 move.l10n_latam_document_type_id = latam_doc_type
+
+    @api.model
+    def _find_latam_document_type(self, document_type, company):
+        return self.env["l10n_latam.document.type"].search(
+            [
+                ("code", "=", document_type.code),
+                ("country_id", "=", company.account_fiscal_country_id.id),
+            ],
+            limit=1,
+        )
 
     def _compute_imported_terms(self):
         self.ensure_one()
@@ -511,13 +530,19 @@ class AccountMove(models.Model):
         """
         protected = set()
         for fname in vals:
+            if fname == "tax_totals":
+                # Skip protecting tax_totals since it is updated explicitly
+                # after create/write, same as the native override this one
+                # replaces. Protecting it here freezes the whole group of
+                # computed fields sharing its @api.depends, including the
+                # totals the accounting engine needs to recompute to keep the
+                # entry balanced.
+                continue
             if (
                 records._name == "account.move"
                 and records.fiscal_document_id
                 and records.fiscal_document_id._fields.get(fname)
-            ):
-                continue
-            elif (
+            ) or (
                 records._name == "account.move.line"
                 and records.fiscal_document_line_id
                 and records.fiscal_document_line_id._fields.get(fname)
@@ -537,6 +562,35 @@ class AccountMove(models.Model):
         with super()._sync_dynamic_lines(container):
             yield
         self.update_payment_term_number()
+
+    @contextmanager
+    def _sync_tax_lines(self, container):
+        with super()._sync_tax_lines(container):
+            yield
+        self._sync_fiscal_product_amounts(container)
+
+    def _sync_fiscal_product_amounts(self, container):
+        moves = container["records"].filtered(
+            lambda move: move.fiscal_operation_id and move.is_invoice(True)
+        )
+        lines = moves.line_ids.filtered(lambda line: line.display_type == "product")
+        amount_currency_field = lines._fields["amount_currency"]
+        for line in lines:
+            if self.env.is_protected(amount_currency_field, line):
+                continue
+            amount_currency = (
+                line._fiscal_unsigned_amount_currency() * line.move_id.direction_sign
+            )
+            if line.currency_id.compare_amounts(line.amount_currency, amount_currency):
+                line.amount_currency = amount_currency
+            if line.currency_id == line.company_id.currency_id:
+                if line.company_id.currency_id.compare_amounts(
+                    line.balance, amount_currency
+                ):
+                    line.balance = amount_currency
+        if lines:
+            self.env.add_to_compute(lines._fields["debit"], lines)
+            self.env.add_to_compute(lines._fields["credit"], lines)
 
     def update_payment_term_number(self):
         for move in self.filtered(
@@ -770,6 +824,54 @@ class AccountMove(models.Model):
     def action_send_email(self):
         self.ensure_one_doc()
         return self.fiscal_document_id.action_send_email()
+
+    def action_check_status(self):
+        """Ask the SEFAZ about the fiscal documents of the selected invoices.
+
+        Soft dependency: the consult lives in l10n_br_fiscal_edi, which this
+        module does not depend on.
+        """
+        without_document = self.filtered(
+            lambda move: not move.fiscal_document_ids
+        ).mapped("display_name")
+        documents = self.mapped("fiscal_document_ids")
+        if not hasattr(documents, "action_check_status"):
+            raise UserError(
+                _(
+                    "Asking the SEFAZ about a document needs the electronic "
+                    "fiscal document module installed."
+                )
+            )
+        result = documents.action_check_status()
+        notes = []
+        if without_document:
+            notes.append(
+                _("Without a fiscal document: %s") % "; ".join(without_document)
+            )
+        settled_by_hand = self._settled_moves_no_longer_valid()
+        if settled_by_hand:
+            notes.append(
+                _("Paid and no longer valid at the SEFAZ, settle by hand: %s")
+                % "; ".join(settled_by_hand.mapped("display_name"))
+            )
+            result["params"]["type"] = "warning"
+            result["params"]["sticky"] = True
+        if notes:
+            result["params"]["message"] = "\n".join(
+                filter(None, [result["params"]["message"], *notes])
+            )
+        return result
+
+    def _settled_moves_no_longer_valid(self):
+        void_states = (DOCUMENT_STATE_CANCEL, SITUACAO_EDOC_DENEGADA)
+        settled_payment_states = ("in_payment", "paid", "partial")
+        return self.filtered(
+            lambda move: move.payment_state in settled_payment_states
+            and any(
+                document.state_edoc in void_states
+                for document in move.fiscal_document_ids
+            )
+        )
 
     @api.constrains("state")
     def _check_l10n_latam_documents(self):
@@ -1029,6 +1131,19 @@ class AccountMove(models.Model):
             move_form.fiscal_document_id = fiscal_document
             move_form.fiscal_operation_id = fiscal_document.fiscal_operation_id
             move_form.document_serie = fiscal_document.document_serie
+            if (
+                "l10n_latam.document.type" in self.env
+                and move_form.l10n_latam_use_documents
+            ):
+                latam_doc_type = self._find_latam_document_type(
+                    fiscal_document.document_type_id, fiscal_document.company_id
+                )
+                if latam_doc_type:
+                    move_form.l10n_latam_document_type_id = latam_doc_type
+                if move_form.l10n_latam_manual_document_number:
+                    move_form.l10n_latam_document_number = (
+                        fiscal_document.document_number
+                    )
 
         unit_and_prices = []
         for line in fiscal_document.fiscal_line_ids:
@@ -1042,12 +1157,16 @@ class AccountMove(models.Model):
                 line_form.fiscal_document_line_id = line
 
                 # SEFAZ Standard: What is included in vProd?
+                # IBS/CBS are "por dentro" (tax_group tax_include=True) like
+                # ICMS/PIS/COFINS, so they belong to amt_inc, not amt_not_inc.
                 amt_inc = (
                     (line.icms_value or 0.0)
                     + (line.pis_value or 0.0)
                     + (line.cofins_value or 0.0)
                     + (line.issqn_value or 0.0)
                     + (line.icmsfcp_value or 0.0)
+                    + (line.ibs_value or 0.0)
+                    + (line.cbs_value or 0.0)
                 )
                 amt_not_inc = (
                     (line.icmsst_value or 0.0)

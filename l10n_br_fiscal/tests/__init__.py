@@ -1,8 +1,10 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 
 from . import (
+    test_cfop,
     test_cnae,
     test_comment,
+    test_comment_test_message,
     test_fiscal_document_serie,
     test_fiscal_document_generic,
     test_fiscal_document_nfse,
@@ -18,4 +20,6 @@ from . import (
     test_service_type,
     test_operation,
     test_company_tax_domain,
+    test_comment,
+    test_comment_test_message,
 )

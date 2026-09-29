@@ -12,7 +12,6 @@ from datetime import datetime
 from erpbrasil.base.fiscal.edoc import ChaveEdoc
 from erpbrasil.transmissao import TransmissaoSOAP
 from lxml import etree
-from nfelib.nfe.bindings.v4_0.dfe_tipos_basicos_v1_00 import TibscbsmonoTot
 from nfelib.nfe.bindings.v4_0.nfe_v4_00 import Nfe
 from nfelib.nfe.bindings.v4_0.proc_nfe_v4_00 import NfeProc
 from nfelib.nfe.ws.edoc_legacy import NFCeAdapter as edoc_nfce
@@ -21,7 +20,7 @@ from requests import Session
 from xsdata.formats.dataclass.parsers import XmlParser
 from xsdata.models.datatype import XmlDateTime
 
-from odoo import _, api, fields
+from odoo import Command, _, api, fields
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT
 
@@ -113,7 +112,7 @@ class NFe(spec_models.StackedModel):
     - <dest> res.partner
     - <retirada> res.partner
     - <entrega> res.partner
-    ≡ <autXML> res.partner
+    ≡ <autXML> l10n_br_nfe.autxml
     ≡ <det> l10n_br_fiscal.document.line
     > <total>
         > <ICMSTot>
@@ -140,7 +139,8 @@ class NFe(spec_models.StackedModel):
     - <cana>
     - <infRespTec> res.partner
     - <infSolicNFF>
-    - <agropecuario>"""
+    - <agropecuario>
+    - <infPAA>"""
 
     ##########################
     # NF-e spec related fields
@@ -687,10 +687,8 @@ class NFe(spec_models.StackedModel):
                 continue
 
             # Calculate totals from lines
-            total_ibs_base = (
-                sum(record.fiscal_line_ids.mapped("ibs_base"))
-                or sum(record.fiscal_line_ids.mapped("cbs_base"))
-                or sum(record.fiscal_line_ids.mapped("price_gross"))
+            total_ibs_base = sum(record.fiscal_line_ids.mapped("ibs_base")) or sum(
+                record.fiscal_line_ids.mapped("cbs_base")
             )
 
             total_ibs_value = sum(record.fiscal_line_ids.mapped("ibs_value"))
@@ -716,6 +714,44 @@ class NFe(spec_models.StackedModel):
             record.nfe40_vDevTribCBS = 0.0
             record.nfe40_vCredPresCBS = 0.0
             record.nfe40_vCredPresCondSusCBS = 0.0
+
+    def _export_tag_nfe_40_ibscbstot(self, xsd_fields, class_obj, export_dict):
+        """Export the IBSCBSTot group of the document (NT 2025.002).
+
+        Dispatched by the spec_driven_model per tag hooks while exporting
+        the nfe40_IBSCBSTot field of the nfe.40.total class: the comodel is
+        the reusable nfe.40.tibscbsmonotot type, so the class name dispatch
+        would not match the IBSCBSTot tag name. This method and the
+        _export_tag_nfe_40_g* ones below only populate export_dict; the
+        framework assembles the bindings.
+        """
+        # Export IBSCBSTot only when the lines export the IBSCBS group
+        if not self._nfe_export_ibscbs_totals():
+            return
+
+        export_dict["vBCIBSCBS"] = self.nfe40_vBCIBSCBS
+
+    def _export_tag_nfe_40_gibs(self, xsd_fields, class_obj, export_dict):
+        export_dict["vIBS"] = self.nfe40_vIBS
+        export_dict["vCredPres"] = self.nfe40_vCredPres
+        export_dict["vCredPresCondSus"] = self.nfe40_vCredPresCondSus
+
+    def _export_tag_nfe_40_gibsuf(self, xsd_fields, class_obj, export_dict):
+        export_dict["vDif"] = self.nfe40_vDifIBSUF
+        export_dict["vDevTrib"] = self.nfe40_vDevTribIBSUF
+        export_dict["vIBSUF"] = self.nfe40_vIBSUF
+
+    def _export_tag_nfe_40_gibsmun(self, xsd_fields, class_obj, export_dict):
+        export_dict["vDif"] = self.nfe40_vDifIBSMun
+        export_dict["vDevTrib"] = self.nfe40_vDevTribIBSMun
+        export_dict["vIBSMun"] = self.nfe40_vIBSMun
+
+    def _export_tag_nfe_40_gcbs(self, xsd_fields, class_obj, export_dict):
+        export_dict["vDif"] = self.nfe40_vDifCBS
+        export_dict["vDevTrib"] = self.nfe40_vDevTribCBS
+        export_dict["vCBS"] = self.nfe40_vCBS
+        export_dict["vCredPres"] = self.nfe40_vCredPresCBS
+        export_dict["vCredPresCondSus"] = self.nfe40_vCredPresCondSusCBS
 
     ##########################
     # NF-e tag: ISSQNtot
@@ -815,7 +851,10 @@ class NFe(spec_models.StackedModel):
             and company.nfe_authorize_technical_download_xml
         ):
             authorized_partners.append(company.technical_support_id.id)
-        return authorized_partners
+        return [
+            Command.create({"partner_id": partner_id})
+            for partner_id in authorized_partners
+        ]
 
     ##########################
     # NF-e tag: autXML
@@ -828,12 +867,9 @@ class NFe(spec_models.StackedModel):
     ################################
 
     def _nfe_export_ibscbs_totals(self):
-        """Return True when the document has IBS/CBS values to export"""
+        """Return True when the document lines export the IBSCBS group"""
         self.ensure_one()
-        return bool(
-            sum(self.fiscal_line_ids.mapped("ibs_value"))
-            or sum(self.fiscal_line_ids.mapped("cbs_value"))
-        )
+        return bool(self.fiscal_line_ids.filtered("tax_classification_id"))
 
     def _export_field(self, xsd_field, class_obj, member_spec, export_value=None):
         if xsd_field == "nfe40_tpAmb":
@@ -856,51 +892,6 @@ class NFe(spec_models.StackedModel):
                 return False
             return f"{self.fiscal_amount_total:.2f}"
 
-        if xsd_field == "nfe40_IBSCBSTot":
-            if not self._nfe_export_ibscbs_totals():
-                return False
-
-            # Build gIBSUF
-            gibsuf = TibscbsmonoTot.GIbs.GIbsuf(
-                vDif=f"{self.nfe40_vDifIBSUF:.2f}",
-                vDevTrib=f"{self.nfe40_vDevTribIBSUF:.2f}",
-                vIBSUF=f"{self.nfe40_vIBSUF:.2f}",
-            )
-
-            # Build gIBSMun
-            gibsmun = TibscbsmonoTot.GIbs.GIbsmun(
-                vDif=f"{self.nfe40_vDifIBSMun:.2f}",
-                vDevTrib=f"{self.nfe40_vDevTribIBSMun:.2f}",
-                vIBSMun=f"{self.nfe40_vIBSMun:.2f}",
-            )
-
-            # Build gIBS
-            gibs = TibscbsmonoTot.GIbs(
-                gIBSUF=gibsuf,
-                gIBSMun=gibsmun,
-                vIBS=f"{self.nfe40_vIBS:.2f}",
-                vCredPres=f"{self.nfe40_vCredPres:.2f}",
-                vCredPresCondSus=f"{self.nfe40_vCredPresCondSus:.2f}",
-            )
-
-            # Build gCBS
-            gcbs = TibscbsmonoTot.GCbs(
-                vDif=f"{self.nfe40_vDifCBS:.2f}",
-                vDevTrib=f"{self.nfe40_vDevTribCBS:.2f}",
-                vCBS=f"{self.nfe40_vCBS:.2f}",
-                vCredPres=f"{self.nfe40_vCredPresCBS:.2f}",
-                vCredPresCondSus=f"{self.nfe40_vCredPresCondSusCBS:.2f}",
-            )
-
-            # Build IBSCBSTot
-            ibscbs_tot = TibscbsmonoTot(
-                vBCIBSCBS=f"{self.nfe40_vBCIBSCBS:.2f}",
-                gIBS=gibs,
-                gCBS=gcbs,
-            )
-
-            return ibscbs_tot
-
         return super()._export_field(xsd_field, class_obj, member_spec, export_value)
 
     def _export_many2one(self, field_name, xsd_required, class_obj=None):
@@ -916,13 +907,7 @@ class NFe(spec_models.StackedModel):
             ):
                 return False
 
-            if field_name == "nfe40_IBSCBSTot":
-                total_ibs = sum(self.fiscal_line_ids.mapped("ibs_value"))
-                total_cbs = sum(self.fiscal_line_ids.mapped("cbs_value"))
-                if not total_ibs and not total_cbs:
-                    return False
-
-            elif (not xsd_required) and field_name not in ["nfe40_enderDest"]:
+            if (not xsd_required) and field_name not in ["nfe40_enderDest"]:
                 comodel = self.env[
                     self._get_stacking_points().get(field_name).comodel_name
                 ]
@@ -982,8 +967,8 @@ class NFe(spec_models.StackedModel):
     @api.model
     def _build_attr(self, node, fields, vals, path, attr):
         key = f"nfe40_{attr[1].metadata.get('name', attr[0])}"
-        if key == "nfe40_IBSCBSTot":
-            # IBSCBSTot fields are computed from lines, skip importing
+        if key in ("nfe40_IBSCBSTot", "nfe40_ISTot"):
+            # IBSCBSTot/ISTot totals are computed from lines, skip importing
             return
         return super()._build_attr(node, fields, vals, path, attr)
 
@@ -1036,6 +1021,12 @@ class NFe(spec_models.StackedModel):
             if company_vat != emit_vat:
                 vals["issuer"] = "partner"
             new_value["vat"] = emit_vat
+            # Capture the emitente's tax regime (CRT) into the supplier
+            # partner's tax_framework (Simples Nacional vs Regime Normal),
+            # which drives the tax mapping and SPED reporting.
+            crt = getattr(value, "CRT", None)
+            if crt is not None:
+                new_value["tax_framework"] = str(getattr(crt, "value", crt))
             super()._build_many2one(
                 self.env["res.partner"], vals, new_value, "partner_id", value, path
             )
@@ -1238,10 +1229,11 @@ class NFe(spec_models.StackedModel):
                 document_id=self,
             )
             record.authorization_event_id = event_id
+            certificate = self.company_id._get_br_certificate()
             signed_xml = edoc.sign_xml(
                 xml_file,
-                self.company_id.certificate.file,
-                self.company_id.certificate.password,
+                certificate.with_context(bin_size=False).content,
+                certificate.pkcs12_password,
                 edoc.infNFe.Id,
             )
             self._validate_xml(signed_xml)
@@ -1664,12 +1656,34 @@ class NFe(spec_models.StackedModel):
         online_event = self.filtered(filter_processador_edoc_nfe)
         if online_event:
             online_event._nfe_cancel()
+            online_event._make_cancelled_danfe()
         return result
+
+    def _make_cancelled_danfe(self):
+        """Regenerate the DANFE with the cancellation watermark.
+
+        The stored DANFE was printed at the authorization, and view_pdf()
+        does not print it again once the document is authorized.
+        """
+        self.ensure_one()
+        if (
+            self.document_type_id.code != MODELO_FISCAL_NFE
+            or self.issuer != DOCUMENT_ISSUER_COMPANY
+            or self.state_edoc != SITUACAO_EDOC_CANCELADA
+        ):
+            return
+        try:
+            self.make_pdf()
+        except Exception:
+            # The SEFAZ already accepted the cancellation: it must not be
+            # rolled back because of the DANFE.
+            _logger.exception(
+                "Error printing the DANFE of the cancelled NF-e %s", self.document_key
+            )
 
     def _need_compute_nfe_tags(self):
         if (
             self.state_edoc in [SITUACAO_EDOC_EM_DIGITACAO, SITUACAO_EDOC_A_ENVIAR]
-            and self.processador_edoc == PROCESSADOR_OCA
             and self.document_type_id.code in [MODELO_FISCAL_NFE, MODELO_FISCAL_NFCE]
             and self.issuer == DOCUMENT_ISSUER_COMPANY
         ):

@@ -51,7 +51,12 @@ class SpedMixin(models.AbstractModel):
 
     brl_currency_id = fields.Many2one(
         comodel_name="res.currency",
-        string="Moeda",
+        # It cannot be labeled just "Currency": several layout records carry
+        # a field of their own with that label (TIP_MOEDA of the X320 of the
+        # ECF, for instance), and two fields with the same label on the same
+        # model raise a WARNING on load, which the OCA checklog turns into a
+        # failure.
+        string="Bookkeeping Currency",
         compute="_compute_currency_id",
         default=lambda self: self.env.ref("base.BRL").id,
     )
@@ -223,10 +228,27 @@ class SpedMixin(models.AbstractModel):
         if view_type != "form":
             return arch, view
 
-        group = E.group(col="4")
-        self._append_top_view_elements(group)
-        group.append(E.field(name="state", invisible="1"))
+        group = E.group()
+        top_group = E.group()
+        left_group = E.group()
+        right_group = E.group()
 
+        group.append(left_group)
+        group.append(right_group)
+
+        self._append_top_view_elements(top_group)
+        top_group.append(E.field(name="state", invisible="1"))
+
+        toggle = True
+        for child in top_group:
+            target = left_group if toggle else right_group
+            target.append(child)
+            toggle = not toggle
+
+        # Wide fields (o2m, m2m, text, html) go into the sheet directly, not a group
+        wide_fields = []
+
+        toggle = True  # alternate left/right for scalar fields
         for fname, field in self._ordered_fields():
             if field.automatic:
                 continue
@@ -240,10 +262,8 @@ class SpedMixin(models.AbstractModel):
             ):
                 continue
             elif field.type in ("one2many", "many2many", "text", "html"):
-                group.append(E.newline())
                 field_tag = E.field(
                     name=fname,
-                    colspan="4",
                     readonly=EDITABLE_ON_DRAFT,
                     context="{'default_declaration_id': declaration_id}",
                 )
@@ -295,16 +315,23 @@ class SpedMixin(models.AbstractModel):
                         field_tag.append(field_tree)
                         field_form = self.env[
                             field.comodel_name
-                        ]._get_default_form_view()  # inline=True)
+                        ]._get_default_form_view()
                         field_tag.append(field_form)
-                group.append(field_tag)
-                group.append(E.newline())
+                wide_fields.append(E.separator(string=field.string))
+                wide_fields.append(field_tag)
             elif fname.isupper():
-                group.append(E.field(name=fname, readonly=EDITABLE_ON_DRAFT))
-        group.append(E.separator())
+                # alternate between left and right inner groups
+                target = left_group if toggle else right_group
+                target.append(E.field(name=fname, readonly=EDITABLE_ON_DRAFT))
+                toggle = not toggle
+
+        # Assemble the sheet: header group first, then wide fields below
+        sheet_children = [group, E.separator()]
+        sheet_children.extend(wide_fields)
+
         form = E.form()
         self._append_view_header(form)
-        form.append(E.sheet(group, string=self._description))
+        form.append(E.sheet(*sheet_children, string=self._description))
         self._append_view_footer(form)
         return form, view
 
@@ -566,21 +593,19 @@ class SpedMixin(models.AbstractModel):
             return str(value) if value else ""
         elif field.type == "integer":
             return "" if value == 0 else str(value)
+        elif field.type == "monetary":
+            # only monetary: a quantity is Float with digits=(16, 5) and two
+            # decimals would round it (0,125 as "0,13")
+            return (
+                ""
+                if float_is_zero(value, precision_digits=8)
+                else (f"{value:.2f}".replace(".", ","))
+            )
         elif field.type == "float":
             return (
                 str(int(value))
                 if float_is_zero(value % 1, 6)
                 else str(round(value, 6)).replace(".", ",")
-            )
-        elif field.type == "monetary":  # TODO is is usefull? (not used now)
-            return (
-                ""
-                if float_is_zero(value, precision_digits=8)
-                else (
-                    str(int(value))
-                    if float_is_zero(value % 1, precision_digits=8)
-                    else str(value)
-                )
             )
         else:
             return str(value)

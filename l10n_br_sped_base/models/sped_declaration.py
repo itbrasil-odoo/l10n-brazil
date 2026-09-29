@@ -257,10 +257,10 @@ class SpedDeclaration(models.AbstractModel):
         blocos = defaultdict(list)
         current_bloco = None
         for line in sped_txt.splitlines():
-            # Uma linha de registro é "|REG|...". Qualquer outra coisa é
-            # ignorada: linhas de resumo dos blocos 0 e 9, e fragmentos
-            # deixados por um campo cujo valor continha quebra de linha. Isso
-            # também garante que o split nunca estoure em linha corrompida.
+            # A register line is "|REG|...". Anything else is skipped: block
+            # 0/9 summary lines, and fragments left by a field value that
+            # contained a line break. This also guarantees the split can never
+            # crash on a corrupted line.
             if not line.startswith("|") or len(line) < 2 or line[1] in "09":
                 continue
             current_bloco = line[1]
