@@ -126,7 +126,7 @@
     <menuitem
         id="menu_tax_assessment"
         name="Apuração de Impostos"
-        parent="account.menu_finance_entries_actions"
+        parent="account.menu_finance_entries"
         action="action_tax_assessment"
         sequence="90"
     />
