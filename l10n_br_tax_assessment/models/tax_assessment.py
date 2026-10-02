@@ -68,7 +68,7 @@ class TaxAssessment(models.Model):
         readonly="state != 'draft'",
         help="Grupo apurado nesta conta gráfica (ICMS, IPI, PIS, COFINS). "
         "As contas contábeis usadas no encerramento vêm deste grupo "
-        "(property_tax_payable_account_id e irmãs), que o core já modela.",
+        "(tax_payable_account_id e irmãs), que o core já modela.",
     )
     tax_domain = fields.Selection(
         related="tax_group_id.fiscal_tax_group_id.tax_domain",
@@ -511,9 +511,9 @@ class TaxAssessment(models.Model):
         self.ensure_one()
         group = self.tax_group_id.with_company(self.company_id)
         missing = []
-        if not group.property_tax_payable_account_id:
+        if not group.tax_payable_account_id:
             missing.append(_("conta de imposto a pagar"))
-        if not group.property_tax_receivable_account_id:
+        if not group.tax_receivable_account_id:
             missing.append(_("conta de imposto a recuperar"))
         if missing:
             raise UserError(
@@ -649,7 +649,7 @@ class TaxAssessment(models.Model):
                 0,
                 {
                     "name": label,
-                    "account_id": group.property_tax_payable_account_id.id,
+                    "account_id": group.tax_payable_account_id.id,
                     "debit": offset,
                     "credit": 0.0,
                 },
@@ -659,7 +659,7 @@ class TaxAssessment(models.Model):
                 0,
                 {
                     "name": label,
-                    "account_id": group.property_tax_receivable_account_id.id,
+                    "account_id": group.tax_receivable_account_id.id,
                     "debit": 0.0,
                     "credit": offset,
                 },
