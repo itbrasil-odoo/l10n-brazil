@@ -35,7 +35,7 @@ class TestEfdContribuicoesRules(TransactionCase):
             {
                 "name": "Autopeças Fictícia Matriz",
                 "legal_name": "AUTOPECAS FICTICIA LTDA",
-                "vat": _cnpj(11222333, 1),
+                "vat": _cnpj(60708091, 1),
                 "country_id": ref("base.br").id,
                 "state_id": state.id,
                 "city_id": city.id,
@@ -47,7 +47,7 @@ class TestEfdContribuicoesRules(TransactionCase):
             {
                 "name": "Autopeças Fictícia Filial",
                 "legal_name": "AUTOPECAS FICTICIA LTDA",
-                "vat": _cnpj(11222333, 2),
+                "vat": _cnpj(60708091, 2),
                 "country_id": ref("base.br").id,
                 "state_id": state.id,
                 "city_id": city.id,
@@ -58,7 +58,7 @@ class TestEfdContribuicoesRules(TransactionCase):
             {
                 "name": "Cliente Fictício",
                 "is_company": True,
-                "vat": _cnpj(44555666, 1),
+                "vat": _cnpj(70809012, 1),
                 "country_id": ref("base.br").id,
                 "state_id": state.id,
                 "city_id": city.id,
