@@ -28,8 +28,7 @@ ALNUM_CNPJ = "12.ABC.345/01DE-35"
 ALNUM_CNPJ_STRIPPED = "12ABC34501DE35"
 
 
-@tagged("post_install", "-at_install")
-class TestRules2026(common.TransactionCase):
+class Rules2026Common(common.TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -132,6 +131,9 @@ class TestRules2026(common.TransactionCase):
             and reg.res_id == document.id
         )
 
+
+@tagged("post_install", "-at_install")
+class TestRules2026(Rules2026Common):
     # ------------------------------------------------------------------
     # COD_SIT with state_fiscal NULL
     # ------------------------------------------------------------------
@@ -295,3 +297,110 @@ class TestRules2026(common.TransactionCase):
         self.assertEqual(model._format_field_value(field, 1234.5), "1234,50")
         self.assertEqual(model._format_field_value(field, 1234.0), "1234")
         self.assertEqual(model._format_field_value(field, 0.0), "0")
+
+
+@tagged("post_install", "-at_install")
+class TestPvaRules(Rules2026Common):
+    """Rules the PVA 6.1.1 refused on a real file, one test each."""
+
+    def _pull(self, model_name):
+        model = self.env[model_name].with_context(
+            company_id=self.company.id,
+            declaration=self.declaration,
+            default_declaration_id=self.declaration.id,
+        )
+        self.declaration.invalidate_recordset()
+        model._pull_records_from_odoo("efd_icms_ipi", 2, log_msg=StringIO())
+        return self.env[model_name].search(
+            [("declaration_id", "=", self.declaration.id)]
+        )
+
+    def test_entry_takes_the_ipi_cst_of_the_entry_side(self):
+        # a supplier's NF-e brings its exit CST (50); the entry books 00
+        document = self._document(
+            60,
+            fiscal_operation_type="in",
+            issuer="partner",
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_2152").id,
+                    ipi_cst_id=self.env.ref("l10n_br_fiscal.cst_ipi_50").id,
+                )
+            ],
+        )
+        c170 = self._c100_of(document).reg_C170_ids
+        self.assertEqual(c170.CST_IPI, "00")
+        self.assertFalse(c170.COD_ENQ, "the framework code is the issuer's")
+        self.assertEqual(c170.COD_ITEM, "FIC-001")
+
+    def test_own_nfe_has_no_items_and_no_0200(self):
+        """Exceção 2, and the PVA refuses a 0200 no register references."""
+        document = self._document(61, lines=[self._icms_line()])
+        self.assertFalse(self._c100_of(document).reg_C170_ids)
+        self.assertFalse(self._pull("l10n_br_sped.efd_icms_ipi.0200"))
+
+    def test_participant_of_a_cancelled_document_is_not_listed(self):
+        cancelled_partner = self.partner.copy({"vat": False, "name": "Cancelado"})
+        self._document(62, state_edoc="cancelada", partner_id=cancelled_partner.id)
+        self._document(63, lines=[self._icms_line()])
+        partners = self._pull("l10n_br_sped.efd_icms_ipi.0150").mapped("res_id")
+        self.assertIn(self.partner.id, partners)
+        self.assertNotIn(cancelled_partner.id, partners)
+
+    def test_foreign_participant_gets_a_code(self):
+        foreign = self.env["res.partner"].create(
+            {"name": "Fornecedor estrangeiro", "country_id": self.env.ref("base.us").id}
+        )
+        vals = self.env["l10n_br_sped.efd_icms_ipi.0150"]._map_from_odoo(
+            foreign, None, self.declaration
+        )
+        self.assertEqual(vals["COD_PART"], f"P{foreign.id}")
+
+    def test_c101_only_for_another_uf(self):
+        self.partner.state_id = self.company.state_id
+        same_uf = self._document(64, lines=[self._icms_line()])
+        same_uf.amount_icmsfcp_value = 10.0
+        self.assertFalse(self._c100_of(same_uf).reg_C101_ids)
+
+    def test_st_retention_feeds_e200_e210(self):
+        self.partner.state_id = self.company.state_id
+        self._document(
+            65,
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_5405").id,
+                    icmsst_value=12.34,
+                )
+            ],
+        )
+        self.declaration.write({"cod_receita": "1206", "cod_receita_st": "2204"})
+        e200 = self._pull("l10n_br_sped.efd_icms_ipi.e200")
+        self.assertEqual(e200.mapped("UF"), [self.company.state_id.code])
+        e210 = e200.reg_E210_ids
+        self.assertAlmostEqual(e210.VL_RETENCAO_ST, 12.34, places=2)
+        self.assertAlmostEqual(e210.VL_ICMS_RECOL_ST, 12.34, places=2)
+        self.assertEqual(e210.IND_MOV_ST, "1")
+        # the ST obligation carries the ST revenue code, not the own ICMS one
+        self.assertEqual(e210.reg_E250_ids.COD_REC, "2204")
+        self.assertEqual(e210.reg_E250_ids.COD_OR, "002")
+
+    def test_no_e500_for_who_is_not_an_ipi_taxpayer(self):
+        group = self.env["account.tax.group"].create(
+            {
+                "name": "IPI (teste)",
+                "fiscal_tax_group_id": self.env.ref("l10n_br_fiscal.tax_group_ipi").id,
+            }
+        )
+        assessment = self.env["l10n_br_tax.assessment"].create(
+            {
+                "company_id": self.company.id,
+                "tax_group_id": group.id,
+                "date_from": "2026-09-01",
+                "date_to": "2026-09-30",
+            }
+        )
+        assessment.state = "posted"
+        self.declaration.IND_ATIV = "1"
+        self.assertFalse(self._pull("l10n_br_sped.efd_icms_ipi.e500"))
+        self.declaration.IND_ATIV = "0"
+        self.assertTrue(self._pull("l10n_br_sped.efd_icms_ipi.e500"))
