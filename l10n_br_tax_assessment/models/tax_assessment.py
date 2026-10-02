@@ -365,10 +365,13 @@ class TaxAssessment(models.Model):
         True, so it also catches every tax created without an explicit value.
         """
         self.ensure_one()
+        # 18.0 branches use the taxes of their parent company: the taxes are
+        # searched up the company tree, while the move lines they are read
+        # from stay within the assessed company (`_get_period_context`).
         taxes = self.env["account.tax"].search(
             [
                 ("tax_group_id", "=", self.tax_group_id.id),
-                ("company_id", "=", self.company_id.id),
+                ("company_id", "parent_of", self.company_id.id),
             ]
         )
         return taxes.filtered(lambda tax: not self._is_counterpart_tax(tax))
