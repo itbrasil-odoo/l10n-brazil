@@ -477,3 +477,24 @@ class TestEfdContribuicoesRules(TransactionCase):
         for block in ("A", "C", "D", "F", "I", "M", "1"):
             self.assertIn(f"|{block}001|", text)
         self.assertNotIn("|P001|", text)
+
+    def test_c170_zero_values_written_when_cst_requires(self):
+        """CST 01 com valor zero: base, alíquota e valor vão como 0, não vazios."""
+        self._document(
+            lines=[
+                {
+                    "pis_base": 0.0,
+                    "pis_percent": 0.0,
+                    "pis_value": 0.0,
+                    "cofins_base": 0.0,
+                    "cofins_percent": 0.0,
+                    "cofins_value": 0.0,
+                }
+            ]
+        )
+        declaration = self._declaration()
+        fields = self._lines(declaration._generate_sped_text(), "C170")[0].split("|")
+        # CST_PIS (25), VL_BC_PIS (26), ALIQ_PIS (27), VL_PIS (30)
+        self.assertEqual(
+            (fields[25], fields[26], fields[27], fields[30]), ("01", "0", "0", "0")
+        )
