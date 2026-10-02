@@ -53,7 +53,6 @@ class TaxAssessment(models.Model):
         column1="assessment_id",
         column2="company_id",
         string="Filiais consolidadas",
-        readonly="state != 'draft'",
         help="Filiais (branches) cujos lançamentos entram nesta apuração. "
         "PIS e COFINS são apurados pela pessoa jurídica, centralizados na "
         "matriz: no Odoo as filiais usam os impostos da empresa-mãe, e os "
