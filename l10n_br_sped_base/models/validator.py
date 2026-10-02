@@ -60,6 +60,10 @@ class SpedValidator:
         skipped.
     """
 
+    # Official block order of the declaration (without the closing block 9).
+    # Each declaration has its own: the EFD ICMS/IPI goes 0 B C D E G H K 1.
+    blocks = BLOCKS
+
     def __init__(self, text, registers=None):
         self.text = text
         self.registers = registers or {}
@@ -149,7 +153,7 @@ class SpedValidator:
                     f"block {block} reappears after it was already closed",
                 )
 
-        expected = [block for block in BLOCKS + ["9"] if block in seen]
+        expected = [block for block in list(self.blocks) + ["9"] if block in seen]
         if seen != expected:
             self._error(
                 0,
@@ -158,7 +162,7 @@ class SpedValidator:
             )
 
         codes = {code for _number, code, _fields in structure}
-        for block in BLOCKS:
+        for block in self.blocks:
             if block not in seen:
                 continue
             opening = "0001" if block == "0" else f"{block}001"
