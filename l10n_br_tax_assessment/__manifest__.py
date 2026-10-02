@@ -3,7 +3,7 @@
 {
     "name": "Apuração de Impostos sobre Consumo (Brasil)",
     "summary": "Conta gráfica mensal de ICMS, IPI, PIS e COFINS",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.0.1",
     "category": "Localization/Brazil",
     "license": "AGPL-3",
     "author": "KMEE, Odoo Community Association (OCA)",
@@ -19,11 +19,9 @@
         "security/ir.model.access.csv",
         "views/tax_assessment_views.xml",
     ],
-    "demo": [
-        "demo/tax_assessment_demo.xml",
-    ],
-    # The invoices the demo assessment computes from are loaded by the hook,
-    # not from here: they need the demo company active and its chart loaded.
+    # The demo (invoices and the assessments computed from them) is loaded by
+    # the hook, not from here: it needs the demo company active and its chart
+    # loaded, and in 18.0 the tax groups it assesses only exist per company.
     "post_init_hook": "post_init_hook",
     "installable": True,
 }
