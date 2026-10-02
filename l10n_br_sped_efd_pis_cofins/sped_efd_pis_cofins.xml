@@ -279,32 +279,6 @@
         id="efd_pis_cofins_m800"
     />
 
-    <menuitem name="BLOCO P" parent="efd_pis_cofins" id="efd_pis_cofins_p" />
-
-    <record id='efd_pis_cofins_p010_action' model='ir.actions.act_window'>
-        <field name="name">P010 Identificação do Estabelecimento</field>
-        <field name="res_model">l10n_br_sped.efd_pis_cofins.6.p010</field>
-        <field name="view_mode">list,form</field>
-    </record>
-    <menuitem
-        action="efd_pis_cofins_p010_action"
-        parent="efd_pis_cofins_p"
-        id="efd_pis_cofins_p010"
-    />
-
-    <record id='efd_pis_cofins_p200_action' model='ir.actions.act_window'>
-        <field
-            name="name"
-        >P200 Consolidação da Contribuição Previdenciária sobre a Receita Bruta</field>
-        <field name="res_model">l10n_br_sped.efd_pis_cofins.6.p200</field>
-        <field name="view_mode">list,form</field>
-    </record>
-    <menuitem
-        action="efd_pis_cofins_p200_action"
-        parent="efd_pis_cofins_p"
-        id="efd_pis_cofins_p200"
-    />
-
     <menuitem name="BLOCO 1" parent="efd_pis_cofins" id="efd_pis_cofins_1" />
 
     <record id='efd_pis_cofins_1010_action' model='ir.actions.act_window'>

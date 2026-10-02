@@ -182,24 +182,6 @@ class Registro0140(models.Model):
         }
 
 
-class Registro0145(models.Model):
-    "Regime de Apuração da Contribuição Previdenciária sobre a Receita Bruta"
-
-    _description = textwrap.dedent(f"    {__doc__}")
-    _name = "l10n_br_sped.efd_pis_cofins.0145"
-    _inherit = "l10n_br_sped.efd_pis_cofins.6.0145"
-
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "COD_INC_TRIB": 0,  # Código indicador da incidência tributária no pe...
-    #         "VL_REC_TOT": 0,  # Valor da Receita Bruta Total da Pessoa Jurídica n...
-    #         "VL_REC_ATIV": 0,  # Valor da Receita Bruta da(s) Atividade(s) Sujeit...
-    #         "VL_REC_DEMAIS_ATIV": 0,  # Valor da Receita Bruta da(s) Atividade(s)...
-    #         "INFO_COMPL": 0,  # Informação complementar
-    #     }
-
-
 class Registro0150(models.Model):
     "Tabela de Cadastro do Participante"
 
@@ -3415,114 +3397,6 @@ class RegistroM810(models.Model):
     #         "VL_REC": 0,  # Valor da receita bruta no período, relativo a naturez...
     #         "COD_CTA": 0,  # Código da conta analítica contábil debitada/creditad...
     #         "DESC_COMPL": 0,  # Descrição Complementar da Natureza da Receita.
-    #     }
-
-
-class RegistroP010(models.Model):
-    "Identificação do Estabelecimento"
-
-    _description = textwrap.dedent(f"    {__doc__}")
-    _name = "l10n_br_sped.efd_pis_cofins.p010"
-    _inherit = "l10n_br_sped.efd_pis_cofins.6.p010"
-
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "CNPJ": 0,  # Número de inscrição do estabelecimento no CNPJ.
-    #     }
-
-
-class RegistroP100(models.Model):
-    "Contribuição Previdenciária sobre a Receita Bruta"
-
-    _description = textwrap.dedent(f"    {__doc__}")
-    _name = "l10n_br_sped.efd_pis_cofins.p100"
-    _inherit = "l10n_br_sped.efd_pis_cofins.6.p100"
-
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "DT_INI": 0,  # Data inicial a que a apuração se refere
-    #         "DT_FIN": 0,  # Data final a que a apuração se refere
-    #         "VL_REC_TOT_EST": 0,  # Valor da Receita Bruta Total do Estabelecimen...
-    #         "COD_ATIV_ECON": 0,  # Código indicador correspondente à atividade su...
-    #         "VL_REC_ATIV_ESTAB": 0,  # Valor da Receita Bruta do Estabelecimento,...
-    #         "VL_EXC": 0,  # Valor das Exclusões da Receita Bruta informada no Cam...
-    #         "VL_BC_CONT": 0,  # Valor da Base de Cálculo da Contribuição Previden...
-    #         "ALIQ_CONT": 0,  # Alíquota da Contribuição Previdenciária sobre a Re...
-    #         "VL_CONT_APU": 0,  # Valor da Contribuição Previdenciária Apurada sob...
-    #         "COD_CTA": 0,  # Código da conta analítica contábil referente à Contr...
-    #         "INFO_COMPL": 0,  # Informação complementar do registro
-    #     }
-
-
-class RegistroP110(models.Model):
-    "Complemento da Escrituração – Detalhamento da Apuração da Contribuição"
-
-    _description = textwrap.dedent(f"    {__doc__}")
-    _name = "l10n_br_sped.efd_pis_cofins.p110"
-    _inherit = "l10n_br_sped.efd_pis_cofins.6.p110"
-
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "NUM_CAMPO": 0,  # Informar o número do campo do registro “P100”, obj...
-    #         "COD_DET": 0,  # Código do tipo de detalhamento, conforme Tabela 5.1....
-    #         "DET_VALOR": 0,  # Valor detalhado referente ao campo 02 deste regist...
-    #         "INF_COMPL": 0,  # Informação complementar do detalhamento.
-    #     }
-
-
-class RegistroP199(models.Model):
-    "Processo Referenciado"
-
-    _description = textwrap.dedent(f"    {__doc__}")
-    _name = "l10n_br_sped.efd_pis_cofins.p199"
-    _inherit = "l10n_br_sped.efd_pis_cofins.6.p199"
-
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "NUM_PROC": 0,  # Identificação do processo ou ato concessório
-    #         "IND_PROC": 0,  # Indicador da origem do processo: 1 - Justiça Federa...
-    #     }
-
-
-class RegistroP200(models.Model):
-    "Consolidação da Contribuição Previdenciária sobre a Receita Bruta"
-
-    _description = textwrap.dedent(f"    {__doc__}")
-    _name = "l10n_br_sped.efd_pis_cofins.p200"
-    _inherit = "l10n_br_sped.efd_pis_cofins.6.p200"
-
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "PER_REF": 0,  # Período de referencia da escrituração (MMAAAA)
-    #         "VL_TOT_CONT_APU": 0,  # Valor total apurado da Contribuição Previden...
-    #         "VL_TOT_AJ_REDUC": 0,  # Valor total de “Ajustes de redução” (Registr...
-    #         "VL_TOT_AJ_ACRES": 0,  # Valor total de “Ajustes de acréscimo” (Regis...
-    #         "VL_TOT_CONT_DEV": 0,  # Valor total da Contribuição Previdenciária s...
-    #         "COD_REC": 0,  # Código de Receita referente à Contribuição Previdenc...
-    #     }
-
-
-class RegistroP210(models.Model):
-    "Ajuste da Contribuição Previdenciária Apurada sobre a Receita Bruta"
-
-    _description = textwrap.dedent(f"    {__doc__}")
-    _name = "l10n_br_sped.efd_pis_cofins.p210"
-    _inherit = "l10n_br_sped.efd_pis_cofins.6.p210"
-
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "IND_AJ": 0,  # Indicador do tipo de ajuste: 0- Ajuste de redução; 1-...
-    #         "VL_AJ": 0,  # Valor do ajuste
-    #         "COD_AJ": 0,  # Código do ajuste, conforme a Tabela indicada no item ...
-    #         "NUM_DOC": 0,  # Número do processo, documento ou ato concessório ao ...
-    #         "DESCR_AJ": 0,  # Descrição resumida do ajuste.
-    #         "DT_REF": 0,  # Data de referência do ajuste (ddmmaaaa)
     #     }
 
 
