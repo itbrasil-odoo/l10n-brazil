@@ -29,6 +29,8 @@ class SpecMixinEFDPISCOFINS(models.AbstractModel):
           há centavos ("10.5"), o que o PVA recusa.
         """
         if field.type in ("integer", "float", "monetary") and not value:
+            if self.env.context.get("efd_blank_zero"):
+                return ""
             return "0" if getattr(field, "out_required", False) else ""
         if field.type == "monetary":
             return f"{value:.2f}".replace(".", ",")
