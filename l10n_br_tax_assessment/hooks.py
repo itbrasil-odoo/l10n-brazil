@@ -3,13 +3,12 @@
 
 import logging
 
-from odoo import SUPERUSER_ID, Command, api, tools
+from odoo import Command, tools
 
 _logger = logging.getLogger(__name__)
 
 
-def post_init_hook(cr, registry):
-    env = api.Environment(cr, SUPERUSER_ID, {})
+def post_init_hook(env):
     load_posted_invoice_demo(env)
 
 
@@ -52,7 +51,7 @@ def load_posted_invoice_demo(env):
     env.user.company_id = company
     try:
         tools.convert_file(
-            env.cr,
+            env,
             "l10n_br_tax_assessment",
             "demo/account_invoice_demo.xml",
             None,
