@@ -1,0 +1,122 @@
+# Copyright 2026 - TODAY, KMEE - Luis Felipe Mileo <mileo@kmee.com.br>
+# License AGPL-3.0 or later (https://www.gnu.org/licenses/lgpl-3.0.en.html).
+"""Validador estrutural do sped_base com as regras da EFD-Contribuições.
+
+O validador genérico do sped_base conhece a ordem dos blocos da ECF. A
+EFD-Contribuições tem outra ordem (Guia Prático 1.35, Seção 1: blocos 0, A,
+C, D, F, I, M, P, 1 e 9) e regras condicionais de obrigatoriedade que o spec
+não expressa sozinho.
+"""
+
+from odoo.addons.l10n_br_sped_base.models.validator import SpedValidator
+
+# Guia Prático 1.35, "Estrutura do arquivo": ordem dos blocos. Desde 2025 o
+# bloco P não pode mais ser escriturado (NT 09/2024); os demais são
+# obrigatórios, com ou sem dados.
+BLOCKS = ["0", "A", "C", "D", "F", "I", "M", "P", "1"]
+REQUIRED_BLOCKS = ["0", "A", "C", "D", "F", "I", "M", "1"]
+
+# Guia 1.35, Registro C100: no documento cancelado (02, 03), denegado (04) ou
+# inutilizado (05) só vão REG, IND_OPER, IND_EMIT, COD_MOD, COD_SIT, SER,
+# NUM_DOC e CHV_NFE.
+C100_KEY_FIELDS = (
+    "IND_OPER",
+    "IND_EMIT",
+    "COD_MOD",
+    "COD_SIT",
+    "SER",
+    "NUM_DOC",
+    "CHV_NFE",
+)
+C100_WITHOUT_DATA = ("02", "03", "04", "05")
+
+
+class EfdContribuicoesValidator(SpedValidator):
+    def _validate_blocks(self, structure):
+        """Cada bloco abre e fecha uma vez, na ordem do leiaute."""
+        seen = []
+        for number, code, _fields in structure:
+            if code == "0000":
+                continue
+            block = "0" if code.startswith("0") else code[0]
+            if block not in seen:
+                seen.append(block)
+            elif seen[-1] != block:
+                self._error(
+                    number,
+                    code,
+                    f"block {block} reappears after it was already closed",
+                )
+        expected = [block for block in BLOCKS + ["9"] if block in seen]
+        if seen != expected:
+            self._error(
+                0, "?", f"blocks are out of the official order: {' '.join(seen)}"
+            )
+        codes = {code for _number, code, _fields in structure}
+        if "P001" in codes:
+            self._error(0, "P001", "block P is forbidden since 2025 (NT 09/2024)")
+        for block in REQUIRED_BLOCKS:
+            opening = "0001" if block == "0" else f"{block}001"
+            closing = "0990" if block == "0" else f"{block}990"
+            # na EFD-Contribuições todo bloco é obrigatório, com ou sem dados
+            if opening not in codes:
+                self._error(0, opening, f"the opening of block {block} is missing")
+            if closing not in codes:
+                self._error(0, closing, f"the closing of block {block} is missing")
+
+    def _validate_fields(self, structure):
+        if not self.registers:
+            return
+        for number, code, fields in structure:
+            definition = self.registers.get(code)
+            if definition is None:
+                continue
+            values = fields[1:]
+            if len(values) != len(definition):
+                self._error(
+                    number,
+                    code,
+                    f"the register has {len(values)} fields and the layout "
+                    f"defines {len(definition)}",
+                )
+                continue
+            named = {
+                name: value
+                for value, (name, _r, _t) in zip(values, definition, strict=False)
+            }
+            for value, (name, required, ftype) in zip(values, definition, strict=False):
+                if required and not value and self._is_required(code, name, named):
+                    self._error(number, code, f"field {name} is required")
+                if ftype in ("monetary", "float") and value and "." in value:
+                    self._error(
+                        number,
+                        code,
+                        f"field {name} uses a dot: the SPED decimal separator "
+                        "is the comma and there is no thousands separator",
+                    )
+
+    def _is_required(self, code, name, values):
+        if code == "C100" and values.get("COD_SIT") in C100_WITHOUT_DATA:
+            return name in C100_KEY_FIELDS
+        return True
+
+    def _validate_specific(self, structure):
+        """Fechamentos do bloco M que o PVA confere."""
+        for number, code, fields in structure:
+            if code not in ("M200", "M600"):
+                continue
+            values = [_decimal(value) for value in fields[1:]]
+            # campo 05 = 02 - 03 - 04; 08 = 05 - 06 - 07; 13 = 08 + 12
+            if abs(values[3] - (values[0] - values[1] - values[2])) >= 0.01:
+                self._error(number, code, "field 05 must be 02 - 03 - 04")
+            if abs(values[6] - (values[3] - values[4] - values[5])) >= 0.01:
+                self._error(number, code, "field 08 must be 05 - 06 - 07")
+            if abs(values[11] - (values[6] + values[10])) >= 0.01:
+                self._error(number, code, "field 13 must be 08 + 12")
+
+
+def _decimal(value):
+    try:
+        return float((value or "0").replace(",", "."))
+    except ValueError:
+        return 0.0
