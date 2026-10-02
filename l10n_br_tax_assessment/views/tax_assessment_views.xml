@@ -45,6 +45,11 @@
                                 name="tax_group_id"
                                 readonly="state != 'draft'"
                             />
+                            <field
+                                name="branch_company_ids"
+                                widget="many2many_tags"
+                                groups="base.group_multi_company"
+                            />
                             <field name="tax_domain" />
                             <field name="regime" />
                             <field name="currency_id" invisible="1" />
