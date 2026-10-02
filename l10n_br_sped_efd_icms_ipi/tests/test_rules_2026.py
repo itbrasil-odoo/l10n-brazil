@@ -1,0 +1,297 @@
+# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
+"""Rules of layout 020 and of the 2026 tax reform (Guia Prático 3.2.4).
+
+Every document here is fictitious: made-up partners, numbers and keys.
+"""
+
+from io import StringIO
+
+from odoo.tests import common, tagged
+
+from odoo.addons.l10n_br_sped_efd_icms_ipi.models.sped_efd_icms_ipi import (
+    cod_sit,
+    import_document_code,
+)
+
+
+def fake_key(number):
+    """A well-formed NF-e key of a fictitious issuer (11.222.333/0001-81)."""
+    base = f"3126091122233300018155001{number:09d}1{number:08d}"
+    weights = [2, 3, 4, 5, 6, 7, 8, 9]
+    total = sum(int(digit) * weights[i % 8] for i, digit in enumerate(reversed(base)))
+    rest = total % 11
+    return base + str(0 if rest < 2 else 11 - rest)
+
+
+# Alphanumeric CNPJ as published by the RFB for the 2026 layout (fictitious).
+ALNUM_CNPJ = "12.ABC.345/01DE-35"
+ALNUM_CNPJ_STRIPPED = "12ABC34501DE35"
+
+
+@tagged("post_install", "-at_install")
+class TestRules2026(common.TransactionCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
+        cls.env.user.tz = "America/Sao_Paulo"
+        cls.company = cls.env.company
+        cls.partner = cls.env["res.partner"].create(
+            {
+                "name": "Cliente Ficticio Alfanumerico",
+                "is_company": True,
+                "vat": ALNUM_CNPJ,
+                "country_id": cls.env.ref("base.br").id,
+            }
+        )
+        cls.product = cls.env["product.product"].create(
+            {"name": "Peca ficticia", "default_code": "FIC-001"}
+        )
+        cls.declaration = cls.env["l10n_br_sped.efd_icms_ipi.0000"].create(
+            {
+                "company_id": cls.company.id,
+                "DT_INI": "2026-09-01",
+                "DT_FIN": "2026-09-30",
+            }
+        )
+        cls.cbs_group = cls.env.ref("l10n_br_fiscal.tax_group_cbs")
+        cls.ibs_group = cls.env.ref("l10n_br_fiscal.tax_group_ibs")
+
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+
+    def _document(self, number, state_edoc="autorizada", lines=None, **vals):
+        document = self.env["l10n_br_fiscal.document"].create(
+            {
+                "company_id": self.company.id,
+                "document_type_id": self.env.ref("l10n_br_fiscal.document_55").id,
+                "document_number": str(number),
+                "document_serie": "1",
+                "partner_id": self.partner.id,
+                "fiscal_operation_type": "out",
+                "issuer": "company",
+                # the document totals are only computed under an operation
+                "fiscal_operation_id": self.env.ref("l10n_br_fiscal.fo_venda").id,
+                # 30/09 21:30 in Brasilia is already 01/10 in UTC: the period
+                # bounds and DT_DOC have to read it as September.
+                "document_date": "2026-10-01 00:30:00",
+                "document_key": fake_key(number),
+                **vals,
+            }
+        )
+        for line_vals in lines or [{}]:
+            self.env["l10n_br_fiscal.document.line"].create(
+                {
+                    "document_id": document.id,
+                    "name": "Item ficticio",
+                    "product_id": self.product.id,
+                    "quantity": 1,
+                    "price_unit": 100.0,
+                    **line_vals,
+                }
+            )
+        # set after the lines: the state is not what this test is about, the
+        # SPED reading of it is
+        document.write({"state_edoc": state_edoc})
+        return document
+
+    def _icms_line(self, **vals):
+        return {
+            "icms_tax_id": self.env.ref("l10n_br_fiscal.tax_icms_18").id,
+            "icms_cst_id": self.env.ref("l10n_br_fiscal.cst_icms_60").id,
+            **vals,
+        }
+
+    def _reform_line(self, **vals):
+        return {
+            "cbs_tax_id": self.env.ref("l10n_br_fiscal.tax_cbs_0_9").id,
+            "cbs_cst_id": self.env.ref("l10n_br_fiscal.cst_cbs_000").id,
+            "cbs_value": 0.90,
+            "ibs_tax_id": self.env.ref("l10n_br_fiscal.tax_ibs_0_1").id,
+            "ibs_cst_id": self.env.ref("l10n_br_fiscal.cst_ibs_000").id,
+            "ibs_value": 0.10,
+            **vals,
+        }
+
+    def _pull_c100(self):
+        model = self.env["l10n_br_sped.efd_icms_ipi.c100"].with_context(
+            company_id=self.company.id,
+            declaration=self.declaration,
+            default_declaration_id=self.declaration.id,
+        )
+        self.declaration.invalidate_recordset()
+        model._pull_records_from_odoo("efd_icms_ipi", 2, log_msg=StringIO())
+        return self.env["l10n_br_sped.efd_icms_ipi.c100"].search(
+            [("declaration_id", "=", self.declaration.id)]
+        )
+
+    def _c100_of(self, document):
+        return self._pull_c100().filtered(
+            lambda reg: reg.res_model == "l10n_br_fiscal.document"
+            and reg.res_id == document.id
+        )
+
+    # ------------------------------------------------------------------
+    # COD_SIT with state_fiscal NULL
+    # ------------------------------------------------------------------
+
+    def test_cod_sit_derived_when_state_fiscal_is_empty(self):
+        cases = {
+            "autorizada": "00",
+            "cancelada": "02",
+            "denegada": "04",
+            "inutilizada": "05",
+        }
+        for number, (state_edoc, expected) in enumerate(cases.items(), start=1):
+            with self.subTest(state_edoc=state_edoc):
+                document = self._document(number, state_edoc=state_edoc)
+                document.state_fiscal = False
+                self.assertEqual(cod_sit(document), expected)
+
+    def test_cod_sit_complementary_nfe(self):
+        document = self._document(10)
+        # the purpose follows the operation; a complementary NF-e sets it
+        document.edoc_purpose = "2"
+        document.state_fiscal = False
+        self.assertEqual(cod_sit(document), "06")
+
+    def test_state_fiscal_wins_when_it_is_a_code_of_the_table(self):
+        document = self._document(11)
+        document.state_fiscal = "01"
+        self.assertEqual(cod_sit(document), "01")
+
+    def test_c100_never_goes_out_with_empty_cod_sit(self):
+        document = self._document(12, lines=[self._icms_line()])
+        document.state_fiscal = False
+        self.assertEqual(self._c100_of(document).COD_SIT, "00")
+
+    def test_cancelled_c100_carries_only_the_identification(self):
+        """Guia Prático, C100, Exceção 1: no values and no child register."""
+        document = self._document(13, state_edoc="cancelada")
+        document.state_fiscal = False
+        c100 = self._c100_of(document)
+        self.assertEqual(c100.COD_SIT, "02")
+        self.assertEqual(c100.CHV_NFE, document.document_key)
+        self.assertFalse(c100.COD_PART)
+        self.assertFalse(c100.VL_DOC)
+        self.assertFalse(c100.DT_DOC)
+        self.assertFalse(c100.reg_C190_ids)
+
+    # ------------------------------------------------------------------
+    # Seção 10: CBS, IBS and IS outside VL_DOC and VL_OPR
+    # ------------------------------------------------------------------
+
+    def test_vl_doc_and_vl_opr_leave_cbs_ibs_out(self):
+        # the worst case: CBS/IBS configured as ADDED to the total
+        (self.cbs_group | self.ibs_group).write({"tax_include": False})
+        document = self._document(20, lines=[self._icms_line(**self._reform_line())])
+        document.fiscal_line_ids._compute_fiscal_amounts()
+        line = document.fiscal_line_ids
+        total_with_reform = line.fiscal_amount_total
+        c100 = self._c100_of(document)
+        expected = total_with_reform - line.cbs_value - line.ibs_value
+        self.assertAlmostEqual(c100.VL_DOC, expected, places=2)
+        self.assertAlmostEqual(sum(c100.reg_C190_ids.mapped("VL_OPR")), expected, 2)
+
+    def test_included_cbs_ibs_are_not_subtracted_twice(self):
+        (self.cbs_group | self.ibs_group).write({"tax_include": True})
+        document = self._document(21, lines=[self._icms_line(**self._reform_line())])
+        line = document.fiscal_line_ids
+        c100 = self._c100_of(document)
+        self.assertAlmostEqual(c100.VL_DOC, line.fiscal_amount_total, places=2)
+
+    def test_document_with_only_reform_taxes_is_not_bookkept(self):
+        only_new = self._document(22, lines=[self._reform_line()])
+        with_icms = self._document(23, lines=[self._icms_line(**self._reform_line())])
+        pulled = self._pull_c100()
+        self.assertNotIn(only_new.id, pulled.mapped("res_id"))
+        self.assertIn(with_icms.id, pulled.mapped("res_id"))
+
+    # ------------------------------------------------------------------
+    # dates in the local calendar
+    # ------------------------------------------------------------------
+
+    def test_last_evening_of_the_month_is_in_the_period(self):
+        document = self._document(30, lines=[self._icms_line()])
+        c100 = self._c100_of(document)
+        self.assertTrue(c100, "the 30th at 21:30 (BRT) belongs to September")
+        self.assertEqual(str(c100.DT_DOC), "2026-09-30")
+
+    # ------------------------------------------------------------------
+    # layout 020: CNPJ and key as text
+    # ------------------------------------------------------------------
+
+    def test_alphanumeric_cnpj_goes_out_as_text(self):
+        document = self._document(40, lines=[self._icms_line()])
+        c100 = self._c100_of(document)
+        self.assertEqual(c100.COD_PART, ALNUM_CNPJ_STRIPPED)
+        vals = self.env["l10n_br_sped.efd_icms_ipi.0150"]._map_from_odoo(
+            self.partner, None, self.declaration
+        )
+        self.assertEqual(vals["CNPJ"], ALNUM_CNPJ_STRIPPED)
+        self.assertEqual(vals["COD_PART"], ALNUM_CNPJ_STRIPPED)
+        # the key goes out as written, never coerced to a number
+        self.assertEqual(c100.CHV_NFE, document.document_key)
+        for name in ("CNPJ",):
+            self.assertEqual(
+                self.env["l10n_br_sped.efd_icms_ipi.0150"]._fields[name].type, "char"
+            )
+        self.assertEqual(
+            self.env["l10n_br_sped.efd_icms_ipi.c100"]._fields["CHV_NFE"].type,
+            "char",
+        )
+
+    # ------------------------------------------------------------------
+    # layout 020: C120.COD_DOC_IMP = 2 for the DUIMP
+    # ------------------------------------------------------------------
+
+    def test_duimp_is_import_document_2(self):
+        self.assertEqual(import_document_code("26BR00012345678"), "2")
+        self.assertEqual(import_document_code("2612345678"), "0")
+        self.assertEqual(import_document_code(""), "0")
+
+    def test_c120_from_the_nfe_import_declaration(self):
+        if "nfe.40.di" not in self.env:
+            self.skipTest("l10n_br_nfe is not installed: no <DI> to read")
+        document = self._document(
+            50, lines=[self._icms_line()], fiscal_operation_type="in"
+        )
+        self.env["nfe.40.di"].create(
+            {
+                "nfe40_DI_prod_id": document.fiscal_line_ids.id,
+                "nfe40_nDI": "26BR00012345678",
+            }
+        )
+        c120 = self._c100_of(document).reg_C120_ids
+        self.assertEqual(len(c120), 1)
+        self.assertEqual(c120.COD_DOC_IMP, "2")
+        self.assertEqual(c120.NUM_DOC_IMP, "26BR00012345678")
+
+    # ------------------------------------------------------------------
+    # layout 020: 1310.CAP_TANQUE
+    # ------------------------------------------------------------------
+
+    def test_1310_carries_cap_tanque_as_field_11(self):
+        model = self.env["l10n_br_sped.efd_icms_ipi.1310"]
+        self.assertIn("CAP_TANQUE", model._fields)
+        names = [
+            name
+            for name, field in model._fields.items()
+            if name.isupper() and field.type not in ("one2many", "many2one")
+        ]
+        # field 01 is REG, written by the base: CAP_TANQUE is the 10th data
+        # field, i.e. field 11 of the register
+        self.assertEqual(names[-1], "CAP_TANQUE")
+        self.assertEqual(len(names), 10)
+
+    # ------------------------------------------------------------------
+    # formatting
+    # ------------------------------------------------------------------
+
+    def test_monetary_uses_the_comma(self):
+        model = self.env["l10n_br_sped.efd_icms_ipi.c190"]
+        field = model._fields["VL_OPR"]
+        self.assertEqual(model._format_field_value(field, 1234.5), "1234,50")
+        self.assertEqual(model._format_field_value(field, 1234.0), "1234")
+        self.assertEqual(model._format_field_value(field, 0.0), "0")
