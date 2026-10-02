@@ -574,6 +574,62 @@ class TestTaxAssessmentCompute(AccountTestInvoicingCommon):
             }
         )
 
+    def test_branch_reads_the_taxes_of_its_parent(self):
+        """A branch posts with the taxes of its parent company (18.0).
+
+        The assessment of the branch has to find those taxes up the company
+        tree and read only the branch's own move lines; searching the taxes
+        of the branch alone found none and assessed zero.
+        """
+        branch = self.env["res.company"].create(
+            {
+                "name": "Filial (teste)",
+                "parent_id": self.company.id,
+                "country_id": self.company.country_id.id,
+            }
+        )
+        branch.account_fiscal_country_id = self.company.account_fiscal_country_id
+        self.env.user.company_ids |= branch
+        move = (
+            self.env["account.move"]
+            .with_company(branch)
+            .create(
+                {
+                    "move_type": "out_invoice",
+                    "partner_id": self.partner_a.id,
+                    "invoice_date": "2026-07-10",
+                    "invoice_line_ids": [
+                        Command.create(
+                            {
+                                "name": "venda da filial",
+                                "price_unit": 500.0,
+                                "tax_ids": [Command.set(self.sale_tax.ids)],
+                            }
+                        )
+                    ],
+                }
+            )
+        )
+        move.action_post()
+        # a sale of the parent in the same period must not leak in
+        self.init_invoice(
+            "out_invoice",
+            invoice_date="2026-07-10",
+            amounts=[1000.0],
+            taxes=self.sale_tax,
+            post=True,
+        )
+        a = self.env["l10n_br_tax.assessment"].create(
+            {
+                "company_id": branch.id,
+                "tax_group_id": self.group.id,
+                "date_from": "2026-07-01",
+                "date_to": "2026-07-31",
+            }
+        )
+        a.action_compute()
+        self.assertAlmostEqual(a.debit_total, 90.0, places=2)
+
     def test_compute_reads_posted_invoices(self):
         """The assessed line carries the tax of the posted invoices."""
         self.init_invoice(
