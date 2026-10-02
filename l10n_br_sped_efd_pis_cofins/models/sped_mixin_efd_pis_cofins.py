@@ -34,4 +34,13 @@ class SpecMixinEFDPISCOFINS(models.AbstractModel):
             return "0" if getattr(field, "out_required", False) else ""
         if field.type == "monetary":
             return f"{value:.2f}".replace(".", ",")
-        return super()._format_field_value(field, value)
+        result = super()._format_field_value(field, value)
+        if field.type in ("char", "selection", "text") and result:
+            # Guia 1.35, Seção 3, item a: o campo alfanumérico aceita a tabela
+            # ASCII exceto o "|" e os caracteres não imprimíveis (0 a 31). Um
+            # TAB colado na descrição do produto faz o PGE recusar a
+            # importação do arquivo inteiro.
+            result = "".join(
+                " " if ord(char) < 32 or char == "|" else char for char in result
+            ).strip()
+        return result
