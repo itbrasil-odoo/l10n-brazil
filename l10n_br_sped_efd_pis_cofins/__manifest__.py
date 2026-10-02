@@ -5,13 +5,17 @@
     "name": "SPED - EFD PIS COFINS",
     "summary": """
         Registros do EFD PIS COFINS do SPED""",
-    "version": "18.0.2.0.0",
+    "version": "18.0.2.1.0",
     "license": "AGPL-3",
     "author": "Akretion, Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/l10n-brazil",
     "development_status": "Alpha",
     "maintainers": ["rvalyi", "renatonlima"],
-    "depends": ["l10n_br_sped_base", "l10n_br_account"],
+    "depends": [
+        "l10n_br_sped_base",
+        "l10n_br_account",
+        "l10n_br_tax_assessment",
+    ],
     "external_dependencies": {
         "python": [
             "erpbrasil.base",
