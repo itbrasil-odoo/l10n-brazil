@@ -461,6 +461,11 @@ class TestEfdContribuicoesRules(TransactionCase):
         self.assertEqual(c100._format_field_value(vl_doc, 10.5), "10,50")
         self.assertEqual(c100._format_field_value(vl_doc, 0.0), "0")
         self.assertEqual(c100._format_field_value(vl_desc, 0.0), "")
+        # alfanumérico sem caractere não imprimível nem pipe (Seção 3, a)
+        descr = self.env["l10n_br_sped.efd_pis_cofins.c170"]._fields["DESCR_COMPL"]
+        self.assertEqual(
+            c100._format_field_value(descr, "FILTRO\tDE|OLEO"), "FILTRO DE OLEO"
+        )
 
     def test_generated_file_passes_structural_validator(self):
         self._document()
