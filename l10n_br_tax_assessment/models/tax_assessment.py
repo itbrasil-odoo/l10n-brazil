@@ -46,16 +46,14 @@ class TaxAssessment(models.Model):
         comodel_name="res.company",
         required=True,
         default=lambda self: self.env.company,
-        readonly="state != 'draft'",
     )
     tax_group_id = fields.Many2one(
         comodel_name="account.tax.group",
         string="Grupo de imposto",
         required=True,
-        readonly="state != 'draft'",
         help="Grupo apurado nesta conta gráfica (ICMS, IPI, PIS, COFINS). "
         "As contas contábeis usadas no encerramento vêm deste grupo "
-        "(property_tax_payable_account_id e irmãs), que o core já modela.",
+        "(tax_payable_account_id e irmãs), que o core já modela.",
     )
     tax_domain = fields.Selection(
         related="tax_group_id.fiscal_tax_group_id.tax_domain",
@@ -81,12 +79,10 @@ class TaxAssessment(models.Model):
     date_from = fields.Date(
         string="De",
         required=True,
-        readonly="state != 'draft'",
     )
     date_to = fields.Date(
         string="Até",
         required=True,
-        readonly="state != 'draft'",
     )
     state = fields.Selection(
         selection=[
@@ -499,9 +495,9 @@ class TaxAssessment(models.Model):
         self.ensure_one()
         group = self.tax_group_id.with_company(self.company_id)
         missing = []
-        if not group.property_tax_payable_account_id:
+        if not group.tax_payable_account_id:
             missing.append(_("conta de imposto a pagar"))
-        if not group.property_tax_receivable_account_id:
+        if not group.tax_receivable_account_id:
             missing.append(_("conta de imposto a recuperar"))
         if missing:
             raise UserError(
@@ -637,7 +633,7 @@ class TaxAssessment(models.Model):
                 0,
                 {
                     "name": label,
-                    "account_id": group.property_tax_payable_account_id.id,
+                    "account_id": group.tax_payable_account_id.id,
                     "debit": offset,
                     "credit": 0.0,
                 },
@@ -647,7 +643,7 @@ class TaxAssessment(models.Model):
                 0,
                 {
                     "name": label,
-                    "account_id": group.property_tax_receivable_account_id.id,
+                    "account_id": group.tax_receivable_account_id.id,
                     "debit": 0.0,
                     "credit": offset,
                 },
