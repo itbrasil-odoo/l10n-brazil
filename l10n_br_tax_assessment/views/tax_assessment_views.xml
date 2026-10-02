@@ -48,6 +48,7 @@
                             <field
                                 name="branch_company_ids"
                                 widget="many2many_tags"
+                                readonly="state != 'draft'"
                                 groups="base.group_multi_company"
                             />
                             <field name="tax_domain" />
