@@ -101,7 +101,23 @@ class EfdContribuicoesValidator(SpedValidator):
         return True
 
     def _validate_specific(self, structure):
-        """Fechamentos do bloco M que o PVA confere."""
+        """Referências e fechamentos que o PGE confere."""
+        establishments = {f[3] for _n, c, f in structure if c == "0140"}
+        participants = set()
+        for _n, c, f in structure:
+            if c == "0150":
+                participants.add(f[1])
+        for number, code, fields in structure:
+            # o estabelecimento do bloco precisa estar no 0140
+            # (MSG_EXISTE_CNPJ), e o participante do documento no 0150
+            # (MSG_EXISTE_COD_PART)
+            if code in ("A010", "C010", "D010", "F010") and (
+                fields[1] not in establishments
+            ):
+                self._error(number, code, f"CNPJ {fields[1]} is not in a 0140")
+            if code in ("A100", "C100", "D100") and fields[3]:
+                if fields[3] not in participants:
+                    self._error(number, code, f"COD_PART {fields[3]} is not in a 0150")
         for number, code, fields in structure:
             if code not in ("M200", "M600"):
                 continue

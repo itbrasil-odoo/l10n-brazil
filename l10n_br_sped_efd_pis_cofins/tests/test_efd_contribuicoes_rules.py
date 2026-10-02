@@ -101,6 +101,7 @@ class TestEfdContribuicoesRules(TransactionCase):
                 "fiscal_price": 100.0,
                 "fiscal_quantity": 1.0,
                 "cfop_id": self.cfop_venda.id,
+                "fiscal_operation_id": self.fo_venda.id,
                 "pis_cst_id": self.cst_pis_01.id,
                 "pis_base": 100.0,
                 "pis_percent": 1.65,
