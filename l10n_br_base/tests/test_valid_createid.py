@@ -319,6 +319,15 @@ class ValidCreateIdTest(TransactionCase):
         self.assertEqual(company.l10n_br_ie_code, partner.l10n_br_ie_code)
         self.assertEqual(company.l10n_br_im_code, partner.l10n_br_im_code)
 
+    # Tests on cities
+
+    def test_city_display_name(self):
+        """Test if the city display name shows the state code"""
+        city = self.env.ref("l10n_br_base.city_3205002")
+        self.assertEqual(city.display_name, "Serra - ES")
+        city.state_id = False
+        self.assertEqual(city.display_name, "Serra")
+
 
 # No test on Inscricao Estadual for partners with CPF
 # because they haven't Inscricao Estadual
