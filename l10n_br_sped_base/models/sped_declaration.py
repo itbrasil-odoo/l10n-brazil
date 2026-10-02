@@ -4,8 +4,10 @@
 import base64
 import logging
 from collections import defaultdict
+from datetime import datetime, time, timedelta
 from io import StringIO
 
+import pytz
 from lxml.builder import E
 
 from odoo import _, api, fields, models
@@ -13,6 +15,27 @@ from odoo import _, api, fields, models
 from .sped_mixin import LAYOUT_VERSIONS, SPED_ENCODING
 
 _logger = logging.getLogger(__name__)
+
+# The fiscal period is a range of CALENDAR days in Brazil; the documents store
+# their date as a UTC datetime.
+DEFAULT_TZ = "America/Sao_Paulo"
+
+
+def period_bounds_utc(env, date_from, date_to):
+    """UTC datetimes [start, end) covering local days date_from..date_to.
+
+    `document_date` is a Datetime: comparing it to the period dates takes
+    them as midnight UTC, which drops every document of the last day (and of
+    the last evening of the month, already the next day in UTC) and pulls in
+    the previous month's last evening.
+    """
+    tz = pytz.timezone(env.user.tz or DEFAULT_TZ)
+    start = tz.localize(datetime.combine(date_from, time.min))
+    end = tz.localize(datetime.combine(date_to + timedelta(days=1), time.min))
+    return (
+        start.astimezone(pytz.utc).replace(tzinfo=None),
+        end.astimezone(pytz.utc).replace(tzinfo=None),
+    )
 
 
 class SpedDeclaration(models.AbstractModel):
@@ -146,6 +169,7 @@ class SpedDeclaration(models.AbstractModel):
                     [], order="id DESC", limit=100
                 )
             else:
+                start, end = period_bounds_utc(self.env, record.DT_INI, record.DT_FIN)
                 fiscal_document_ids = self.env["l10n_br_fiscal.document"].search(
                     [
                         ("company_id", "=", record.company_id.id),
@@ -154,8 +178,8 @@ class SpedDeclaration(models.AbstractModel):
                             "in",
                             ("autorizada", "cancelada", "denegada", "inutilizada"),
                         ),
-                        ("document_date", ">=", record.DT_INI),
-                        ("document_date", "<=", record.DT_FIN),
+                        ("document_date", ">=", start),
+                        ("document_date", "<", end),
                     ]
                 )
 
