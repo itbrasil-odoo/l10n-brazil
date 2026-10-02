@@ -74,7 +74,7 @@ class SpedSigner(models.Model):
         for signer in self.filtered("partner_id"):
             partner = signer.partner_id
             signer.name = partner.name
-            signer.cpf_cnpj = partner.vat or partner.cnpj_cpf
+            signer.cpf_cnpj = partner.vat
             signer.email = partner.email
             signer.phone = partner.phone or partner.mobile
 
