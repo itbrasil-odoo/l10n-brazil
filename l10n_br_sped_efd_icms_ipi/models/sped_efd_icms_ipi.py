@@ -67,6 +67,146 @@ def import_document_code(number):
     return "0"
 
 
+def sped_phone(phone):
+    """FONE of 0005/0100: area code plus number, 11 positions at most.
+
+    The partner usually also stores the country code, which does not fit and
+    is not asked for: Brazil's 55 is dropped, only when the number would not
+    fit. A partner with no phone gives an empty field instead of an error.
+    """
+    phone = (phone or "").split(",")[0].strip()
+    phone = misc.punctuation_rm(phone).replace(" ", "")
+    if len(phone) > 11 and phone.startswith("55"):
+        phone = phone[2:]
+    return phone
+
+
+def bookkept_documents(env, declaration):
+    """The documents that get a C100 (see RegistroC100._odoo_domain)."""
+    domain = env["l10n_br_sped.efd_icms_ipi.c100"]._odoo_domain(None, declaration)
+    return env["l10n_br_fiscal.document"].search(domain)
+
+
+def valued_documents(env, declaration):
+    """Bookkept documents with values: not cancelled, denied or voided."""
+    return bookkept_documents(env, declaration).filtered(
+        lambda doc: cod_sit(doc) not in COD_SIT_WITHOUT_VALUES
+    )
+
+
+def has_items(document):
+    """Whether the document is written with its items (C170).
+
+    Guia Prático, C100, Exceção 2: an NF-e/NFC-e issued by the taxpayer goes
+    out as C100 + C190 only.
+    """
+    return not (
+        document.issuer == DOCUMENT_ISSUER_COMPANY
+        and document.document_type_id.code in ("55", "65")
+    )
+
+
+def item_lines(env, declaration):
+    """The lines that become a C170: the only ones 0200/0190/0400 serve.
+
+    The PVA refuses an item, a unit or a nature of operation that no other
+    register references ("não informar ... se não referenciado"), so the
+    tables of block 0 follow the C170, not every line of the period.
+    """
+    documents = valued_documents(env, declaration).filtered(has_items)
+    return documents.mapped("fiscal_line_ids")
+
+
+def ipi_cst(line):
+    """CST_IPI on the taxpayer's side of the operation.
+
+    An entry (CFOP 1/2/3) takes a CST below 50 and an exit one from 50 up
+    (Guia Prático, C170 campo 20). A third party's NF-e brings the CST of the
+    supplier's exit: 50..55 become 00..05 and 99 becomes 49.
+    """
+    code = line.ipi_cst_id.code or ""
+    cfop = line.cfop_id.code or ""
+    if code.isdigit() and cfop[:1] in ("1", "2", "3") and int(code) >= 50:
+        return "49" if code == "99" else f"{int(code) - 50:02d}"
+    return code
+
+
+ST_RETURN_CFOPS = (
+    "1410", "1411", "1414", "1415", "1660", "1661", "1662",
+    "2410", "2411", "2414", "2415", "2660", "2661", "2662",
+)  # fmt: skip
+ST_REFUND_CFOPS = ("1603", "2603")
+
+
+def st_by_uf(env, declaration):
+    """ICMS-ST of the period per UF, read from the documents (E200/E210).
+
+    Guia Prático, E210: the retention (08) is the C190.VL_ICMS_ST of CFOP 5/6,
+    the returns (04) and refunds (05) those of the listed CFOPs and the other
+    credits (06) the remaining entries; the UF is the one of the C100
+    participant. The PVA cross checks every one of them against the C190, so
+    they are summed from the very same lines.
+    """
+    totals = {}
+    for document in valued_documents(env, declaration):
+        uf = document.partner_id.state_id.code or declaration.company_id.state_id.code
+        for line in document.fiscal_line_ids:
+            value = line.icmsst_value
+            if not value:
+                continue
+            cfop = line.cfop_id.code or ""
+            bucket = totals.setdefault(
+                uf, {"retention": 0.0, "return": 0.0, "refund": 0.0, "other": 0.0}
+            )
+            if cfop[:1] in ("5", "6"):
+                bucket["retention"] += value
+            elif cfop in ST_RETURN_CFOPS:
+                bucket["return"] += value
+            elif cfop in ST_REFUND_CFOPS:
+                bucket["refund"] += value
+            elif cfop[:1] in ("1", "2"):
+                bucket["other"] += value
+    return totals
+
+
+def st_assessment(bucket):
+    """E210 fields 03..15 from the period totals of one UF."""
+    credits = bucket["return"] + bucket["refund"] + bucket["other"]
+    debit = bucket["retention"]
+    balance = debit - credits
+    return {
+        "VL_SLD_CRED_ANT_ST": 0.0,
+        "VL_DEVOL_ST": bucket["return"],
+        "VL_RESSARC_ST": bucket["refund"],
+        "VL_OUT_CRED_ST": bucket["other"],
+        "VL_AJ_CREDITOS_ST": 0.0,
+        "VL_RETENCAO_ST": debit,
+        "VL_OUT_DEB_ST": 0.0,
+        "VL_AJ_DEBITOS_ST": 0.0,
+        "VL_SLD_DEV_ANT_ST": max(balance, 0.0),
+        "VL_DEDUCOES_ST": 0.0,
+        "VL_ICMS_RECOL_ST": max(balance, 0.0),
+        "VL_SLD_CRED_ST_TRANSPORTAR": max(-balance, 0.0),
+        "DEB_ESP_ST": 0.0,
+    }
+
+
+def participant_code(partner):
+    """COD_PART shared by 0150 and the documents (C100, C500, D100...).
+
+    The CNPJ/CPF identifies a Brazilian participant; a foreign one (the
+    supplier of an import) has neither, and an empty code makes the PVA
+    refuse both the 0150 and the document pointing at it.
+    """
+    return partner.cnpj_cpf_stripped or f"P{partner.id}"
+
+
+def nature_code(operation):
+    """COD_NAT of 0400/C170: up to 10 characters (Guia Prático, 0400)."""
+    code = (operation.code or "").strip()
+    return code if code and len(code) <= 10 else str(operation.id)
+
+
 def item_code(product):
     """COD_ITEM shared by 0200, C170 and the other item registers."""
     return product.default_code or str(product.id)
@@ -150,59 +290,18 @@ class Registro0000(models.Model):
         default="000",
     )
 
-    cod_receita = fields.Selection(
-        [
-            ("046-2", "Regime Periódico de Apuração"),
-            ("060-7", "Regime de Estimativa"),
-            ("063-2", "Outros recolhimentos especiais"),
-            ("075-9", "Dívida ativa – cobrança amigável"),
-            ("077-2", "Dívida ativa ajuizada - parcelamento"),
-            ("078-4", "Dívida ativa ajuizada"),
-            ("081-4", "Parcelamento de débito fiscal não inscrito"),
-            ("087-5", "ICM/ICMS - Programa de Parcelamento Incentivado - PPI"),
-            ("089-9", "ICM/ICMS - Programa Especial de Parcelamento - PEP"),
-            ("091-7", "ICM/ICMS - Programa Especial de Parcelamento PEP 2017"),
-            ("100-4", "ICMS recolhimento antecipado (outra UF)"),
-            ("101-6", "Consumidor final não contribuinte por operação (outra UF)"),
-            ("102-8", "Consumidor final não contribuinte por apuração (outra UF)"),
-            (
-                "103-0",
-                "Fundo estadual de combate e erradicação da pobreza (FECOEP) - por operação",
-            ),
-            (
-                "104-1",
-                "Fundo estadual de combate e erradicação da pobreza (FECOEP) - por apuração",
-            ),
-            ("106-5", "Exigido em Auto de Infração e Imposição de Multa - AIIM"),
-            (
-                "107-7",
-                "Exigido em Auto de Infração e Imposição de Multa - AIIM (outra UF)",
-            ),
-            ("110-7", "Transporte (Transportador autônomo do Estado de São Paulo)"),
-            ("111-9", "Transporte (outra UF)"),
-            ("112-0", "Comunicação (no Estado de São Paulo)"),
-            ("113-2", "Comunicação (outra UF)"),
-            ("114-4", "Mercadorias destina a consumo ou a ativo imobilizado"),
-            ("115-6", "Energia elétrica (no Estado de São Paulo)"),
-            ("116-8", "Energia elétrica (outra UF)"),
-            ("117-0", "Combustível (no Estado de São Paulo)"),
-            ("118-1", "Combustível (outra UF)"),
-            ("119-3", "Recolhimentos especiais (outra UF)"),
-            ("120-0", "Mercadoria importada (desembaraçada no Estado de São Paulo)"),
-            ("123-5", "Exportação de café cru"),
-            ("128-4", "Operações internas e interestaduais com café cru"),
-            ("137-5", "Abate de gado"),
-            ("141-7", "Operações com feijão"),
-            ("146-6", "Substituição tributária (contribuinte do Estado de São Paulo)"),
-            ("154-5", "Diferença de estimativa"),
-            ("214-8", "Mercadoria importada (desembaraçada em outra UF)"),
-            (
-                "246-0",
-                "Substituição tributária por apuração (contribuinte de outra UF )",
-            ),
-            ("247-1", "Substituição tributária por operação (outra UF)"),
-        ],
+    # The revenue code comes from the table of the taxpayer's UF (Guia
+    # Prático, E116/E250: "Tabela de Código de Receitas da UF"); a closed list
+    # of São Paulo codes made it impossible to file for any other state, MG
+    # included (1206 = ICMS comércio, 2204 = ICMS-ST comércio, tabela 17254).
+    cod_receita = fields.Char(
         string="Código Receita",
+        help="Código de receita do ICMS próprio (E116), da tabela da UF.",
+    )
+    cod_receita_st = fields.Char(
+        string="Código Receita ICMS-ST",
+        help="Código de receita do ICMS-ST retido (E250), da tabela da UF. "
+        "Vazio usa o do ICMS próprio.",
     )
 
     ind_apur = fields.Selection(
@@ -219,6 +318,11 @@ class Registro0000(models.Model):
         help="Data de vencimento do ICMS apurado, usada no E116. O prazo varia "
         "por UF e por regime, então não é derivado: quem sabe o prazo é o "
         "contribuinte.",
+    )
+    dt_vcto_obrigacao_st = fields.Date(
+        string="Vencimento do ICMS-ST",
+        help="Data de vencimento do ICMS-ST retido, usada no E250. Vazio usa "
+        "o vencimento do ICMS próprio.",
     )
 
     ind_tp_leiaute = fields.Selection(
@@ -268,6 +372,8 @@ class Registro0000(models.Model):
             E.field(name="cod_receita", required="1", readonly=EDITABLE_ON_DRAFT)
         )
         group.append(E.field(name="dt_vcto_obrigacao", readonly=EDITABLE_ON_DRAFT))
+        group.append(E.field(name="cod_receita_st", readonly=EDITABLE_ON_DRAFT))
+        group.append(E.field(name="dt_vcto_obrigacao_st", readonly=EDITABLE_ON_DRAFT))
         group.append(E.field(name="ind_apur", required="1", readonly=EDITABLE_ON_DRAFT))
         group.append(
             E.field(name="CLAS_ESTAB_IND", required="1", readonly=EDITABLE_ON_DRAFT)
@@ -354,14 +460,7 @@ class Registro0005(models.Model):
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
-        phone = (record.phone or "").split(",")[0].strip()
-        phone = misc.punctuation_rm(phone).replace(" ", "")
-        # The layout reserves 11 positions (area code plus number) and the
-        # partner record usually also stores the country code, which does not
-        # fit and is not asked for. Only Brazil's 55 is dropped, and only when
-        # the number would not fit.
-        if len(phone) > 11 and phone.startswith("55"):
-            phone = phone[2:]
+        phone = sped_phone(record.phone)
         return {
             "FANTASIA": record.name,
             "CEP": misc.punctuation_rm(record.zip),
@@ -415,11 +514,7 @@ class Registro0100(models.Model):
                 "Cadastre o contador responsável dentro das configurações da Empresa."
             )
             raise UserError(msg_err)
-        # TODO melhorar isso
-        phone = record.phone.split(",")[0].strip()
-        phone = misc.punctuation_rm(phone).replace(" ", "")
-        if len(phone) == 13:
-            phone = phone[2:]
+        phone = sped_phone(record.phone)
         return {
             "NOME": record.name,
             "CPF": record.cnpj_cpf_stripped,
@@ -448,13 +543,19 @@ class Registro0150(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         return [
-            ("id", "in", declaration.fiscal_document_partner_ids.ids),
+            # only the participants a valued C100 points at: the PVA refuses
+            # an unreferenced 0150 (e.g. the customer of a cancelled NF-e)
+            (
+                "id",
+                "in",
+                valued_documents(self.env, declaration).mapped("partner_id").ids,
+            ),
         ]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
         vals = {
-            "COD_PART": record.cnpj_cpf_stripped,
+            "COD_PART": participant_code(record),
             "NOME": record.legal_name or record.name,
             "COD_PAIS": record.country_id.bc_code,
             "IE": misc.punctuation_rm(record.l10n_br_ie_code or ""),
@@ -504,8 +605,14 @@ class Registro0190(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         return [
-            ("id", "in", declaration.fiscal_uom_ids.ids),
+            # the units of the items (0200.UNID_INV) and of the C170 lines
+            ("id", "in", self._referenced_uoms(declaration).ids),
         ]
+
+    @api.model
+    def _referenced_uoms(self, declaration):
+        lines = item_lines(self.env, declaration)
+        return lines.mapped("uom_id") | lines.mapped("product_id.uom_id")
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -529,7 +636,8 @@ class Registro0200(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         return [
-            ("id", "in", declaration.fiscal_product_ids.ids),
+            # only the items a C170 references (Guia Prático, 0200)
+            ("id", "in", item_lines(self.env, declaration).mapped("product_id").ids),
         ]
 
     @api.model
@@ -550,7 +658,7 @@ class Registro0200(models.Model):
 
         return {
             "COD_ITEM": item_code(record),
-            "DESCR_ITEM": record.name,
+            "DESCR_ITEM": (record.name or "").strip(),
             "COD_BARRA": record.barcode,
             # "COD_ANT_ITEM": "", # Não preencher. Ele deve ser especificado no Registro 0205
             "UNID_INV": record.uom_id.code,
@@ -560,7 +668,8 @@ class Registro0200(models.Model):
             "COD_GEN": record.fiscal_genre_id.code,
             "COD_LST": record.service_type_id.code,
             "ALIQ_ICMS": aliq_icms,
-            "CEST": record.cest_id.code,
+            # 7 digits, without the dots the table is usually written with
+            "CEST": misc.punctuation_rm(record.cest_id.code or ""),
         }
 
 
@@ -718,14 +827,18 @@ class Registro0400(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         return [
-            ("id", "in", declaration.fiscal_operation_ids.ids),
+            # only the natures a C170 references (C170.COD_NAT)
+            (
+                "id",
+                "in",
+                item_lines(self.env, declaration).mapped("fiscal_operation_id").ids,
+            ),
         ]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
         return {
-            "COD_NAT": record.code
-            or str(record.id),  # Código da natureza da operação/prestação
+            "COD_NAT": nature_code(record),
             "DESCR_NAT": record.name,  # Descrição da natureza da operação/prestação
         }
 
@@ -1119,7 +1232,7 @@ class RegistroC100(models.Model):
         return {
             "IND_OPER": ind_oper,
             "IND_EMIT": ind_emit,
-            "COD_PART": record.partner_id.cnpj_cpf_stripped,
+            "COD_PART": participant_code(record.partner_id),
             "COD_MOD": record.document_type_id.code,
             "COD_SIT": situation,
             "SER": record.document_serie,
@@ -1162,16 +1275,33 @@ class RegistroC101(models.Model):
     _description = textwrap.dedent(f"    {__doc__}")
     _name = "l10n_br_sped.efd_icms_ipi.c101"
     _inherit = "l10n_br_sped.efd_icms_ipi.20.c101"
+    # without a model the base writes one C101 under EVERY C100, ignoring
+    # the domain below
+    _odoo_model = "l10n_br_fiscal.document"
+
+    VL_FCP_UF_DEST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_ICMS_UF_DEST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_ICMS_UF_REM = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
-        # Only output C101 if there is actually DIFAL or FCP
-        return [
-            ("id", "=", parent_record.id),
-            "|",
-            ("amount_icms_destination_value", ">", 0),
-            ("amount_icmsfcp_value", ">", 0),
-        ]
+        # Only the interstate operation to a final consumer with DIFAL (EC
+        # 87/2015): the PVA refuses a C101 whose participant is in the UF of
+        # the 0000, and it used to come out for every document.
+        document = parent_record
+        if document.partner_id.state_id == declaration.company_id.state_id or not (
+            document.amount_icms_destination_value
+            or document.amount_icms_origin_value
+            or document.amount_icmsfcp_value
+        ):
+            return [(0, "=", 1)]
+        return [("id", "=", document.id)]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -1208,7 +1338,11 @@ class RegistroC110(models.Model):
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
-        # Generate a C110 block for each related document found in C100
+        # Generate a C110 block for each related document found in C100. An
+        # NF-e of the taxpayer goes out without it (Exceção 2: C110 only at
+        # the state's discretion, and it needs a 0450 code).
+        if not has_items(parent_record):
+            return [(0, "=", 1)]
         return [("document_id", "=", parent_record.id)]
 
     @api.model
@@ -1269,14 +1403,21 @@ class RegistroC113(models.Model):
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
-        # Origin doc properties
-        ind_oper = "0" if record.document_id.fiscal_operation_type == "in" else "1"
-        ind_emit = "0" if record.document_id.issuer == "company" else "1"
+        # The REFERENCED document, not the one that references it
+        related = record.document_related_id
+        if related:
+            ind_oper = "0" if related.fiscal_operation_type == "in" else "1"
+            ind_emit = "0" if related.issuer == "company" else "1"
+            cod_part = participant_code(related.partner_id)
+        else:
+            ind_oper = "0" if record.document_id.fiscal_operation_type == "in" else "1"
+            ind_emit = "1"
+            cod_part = misc.punctuation_rm(record.cnpj_cpf or "")
 
         return {
             "IND_OPER": ind_oper,
             "IND_EMIT": ind_emit,
-            "COD_PART": record.cnpj_cpf_stripped if record.cnpj_cpf else "",
+            "COD_PART": cod_part,
             "COD_MOD": record.document_type_code or "",
             "SER": record.document_serie or "",
             "SUB": "",
@@ -1530,8 +1671,7 @@ class RegistroC170(models.Model):
             "IND_MOV": "0" if record.cfop_id.stock_move else "1",
             "CST_ICMS": cst_icms,
             "CFOP": str(record.cfop_id.code),
-            "COD_NAT": record.fiscal_operation_id.code
-            or str(record.fiscal_operation_id.id),
+            "COD_NAT": nature_code(record.fiscal_operation_id),
             "VL_BC_ICMS": record.icms_base,
             "ALIQ_ICMS": record.icms_percent,
             "VL_ICMS": record.icms_value,
@@ -1539,8 +1679,11 @@ class RegistroC170(models.Model):
             "ALIQ_ST": record.icmsst_percent,
             "VL_ICMS_ST": record.icmsst_value,
             "IND_APUR": declaration.ind_apur,
-            "CST_IPI": record.ipi_cst_code,
-            "COD_ENQ": record.ipi_guideline_id.code,
+            "CST_IPI": ipi_cst(record) if record.ipi_cst_id else "",
+            # the legal framework code is the issuer's, for its own exits
+            "COD_ENQ": record.ipi_guideline_id.code
+            if parent_record.fiscal_operation_type != FISCAL_IN
+            else "",
             "VL_BC_IPI": record.ipi_base,
             "ALIQ_IPI": record.ipi_percent,
             "VL_IPI": record.ipi_value,
@@ -2441,9 +2584,9 @@ class RegistroC500(models.Model):
         return {
             "IND_OPER": ind_oper,
             "IND_EMIT": ind_emit,
-            "COD_PART": record.partner_id.cnpj_cpf_stripped,
+            "COD_PART": participant_code(record.partner_id),
             "COD_MOD": record.document_type_id.code,
-            "COD_SIT": record.state_fiscal,
+            "COD_SIT": cod_sit(record),
             "SER": record.document_serie or "",
             "SUB": "",  # Rarely used nowadays
             "COD_CONS": getattr(record, "consumption_class_code", ""),  # MISSING FIELD
@@ -3038,9 +3181,9 @@ class RegistroD100(models.Model):
         return {
             "IND_OPER": "0" if record.fiscal_operation_type == FISCAL_IN else "1",
             "IND_EMIT": "0" if record.issuer == DOCUMENT_ISSUER_COMPANY else "1",
-            "COD_PART": record.partner_id.cnpj_cpf_stripped,
+            "COD_PART": participant_code(record.partner_id),
             "COD_MOD": record.document_type_id.code or "",
-            "COD_SIT": record.state_fiscal,
+            "COD_SIT": cod_sit(record),
             "SER": record.document_serie or "",
             "SUB": "",
             "NUM_DOC": record.document_number or "",
@@ -4286,46 +4429,84 @@ class RegistroE116(models.Model):
 
 
 class RegistroE200(models.Model):
-    """Período de Apuração do ICMS."""
+    """Período da Apuração do ICMS - Substituição Tributária.
+
+    One per UF with ICMS-ST in the period's documents (Guia Prático, E200:
+    mandatory whenever there is an ICMS-ST amount). The ST running account is
+    not in l10n_br_tax_assessment yet, so it is read from the documents, the
+    same lines the PVA checks it against.
+    """
 
     _description = textwrap.dedent(f"    {__doc__}")
     _name = "l10n_br_sped.efd_icms_ipi.e200"
     _inherit = "l10n_br_sped.efd_icms_ipi.20.e200"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "UF": 0,  # Sigla da unidade da federação a que se refere a apuração ...
-    #         "DT_INI": 0,  # Data inicial a que a apuração se refere
-    #         "DT_FIN": 0,  # Data final a que a apuração se refere
-    #     }
+    @api.model
+    def _odoo_query(self, parent_record, declaration):
+        ufs = sorted(st_by_uf(self.env, declaration))
+        if not ufs:
+            return "SELECT 1 WHERE FALSE", []
+        return "SELECT unnest(%s::varchar[]) AS uf ORDER BY 1", [ufs]
+
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        return {
+            "UF": record["uf"],
+            "DT_INI": declaration.DT_INI,
+            "DT_FIN": declaration.DT_FIN,
+        }
 
 
 class RegistroE210(models.Model):
-    """Apuração do ICMS."""
+    """Apuração do ICMS - Substituição Tributária."""
 
     _description = textwrap.dedent(f"    {__doc__}")
     _name = "l10n_br_sped.efd_icms_ipi.e210"
     _inherit = "l10n_br_sped.efd_icms_ipi.20.e210"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "IND_MOV_ST": 0,  # Indicador de movimento: 0 - Sem operações com ST ...
-    #         "VL_SLD_CRED_ANT_ST": 0,  # Valor do "Saldo credor de período anterio...
-    #         "VL_DEVOL_ST": 0,  # Valor total do ICMS ST de devolução de mercadori...
-    #         "VL_RESSARC_ST": 0,  # Valor total do ICMS ST de ressarcimentos
-    #         "VL_OUT_CRED_ST": 0,  # Valor total de Ajustes "Outros créditos ST" e...
-    #         "VL_AJ_CREDITOS_ST": 0,  # Valor total dos ajustes a crédito de ICMS ...
-    #         "VL_RETENCAO_ST": 0,  # Valor Total do ICMS retido por Substituição T...
-    #         "VL_OUT_DEB_ST": 0,  # Valor Total dos ajustes "Outros débitos ST" " ...
-    #         "VL_AJ_DEBITOS_ST": 0,  # Valor total dos ajustes a débito de ICMS ST...
-    #         "VL_SLD_DEV_ANT_ST": 0,  # Valor total de Saldo devedor antes das ded...
-    #         "VL_DEDUCOES_ST": 0,  # Valor total dos ajustes "Deduções ST"
-    #         "VL_ICMS_RECOL_ST": 0,  # Imposto a recolher ST (11-12)
-    #         "VL_SLD_CRED_ST_TRANSPORTAR": 0,  # Saldo credor de ST a transportar ...
-    #         "DEB_ESP_ST": 0,  # Valores recolhidos ou a recolher, extra-apuração
-    #     }
+    # Guia Prático, E210: every field is mandatory, a zero is written "0"
+    VL_SLD_CRED_ANT_ST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_DEVOL_ST = fields.Monetary(out_required=True, currency_field="brl_currency_id")
+    VL_RESSARC_ST = fields.Monetary(out_required=True, currency_field="brl_currency_id")
+    VL_OUT_CRED_ST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_AJ_CREDITOS_ST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_RETENCAO_ST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_OUT_DEB_ST = fields.Monetary(out_required=True, currency_field="brl_currency_id")
+    VL_AJ_DEBITOS_ST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_SLD_DEV_ANT_ST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_DEDUCOES_ST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_ICMS_RECOL_ST = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_SLD_CRED_ST_TRANSPORTAR = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    DEB_ESP_ST = fields.Float(out_required=True)
+
+    @api.model
+    def _odoo_query(self, parent_record, declaration):
+        return "SELECT %s AS uf", [parent_record["uf"]]
+
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        bucket = st_by_uf(self.env, declaration)[record["uf"]]
+        vals = st_assessment(bucket)
+        vals["IND_MOV_ST"] = "1"
+        return vals
 
 
 class RegistroE230(models.Model):
@@ -4369,25 +4550,38 @@ class RegistroE240(models.Model):
 
 
 class RegistroE250(models.Model):
-    """Obrigações do ICMS a Recolher."""
+    """Obrigações do ICMS Recolhido ou a Recolher - Substituição Tributária."""
 
     _description = textwrap.dedent(f"    {__doc__}")
     _name = "l10n_br_sped.efd_icms_ipi.e250"
     _inherit = "l10n_br_sped.efd_icms_ipi.20.e250"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "COD_OR": 0,  # Código da obrigação a recolher, conforme a tabela 5.4
-    #         "VL_OR": 0,  # Valor da obrigação ICMS ST a recolher
-    #         "DT_VCTO": 0,  # Data de vencimento da obrigação
-    #         "COD_REC": 0,  # Código de receita referente à obrigação, próprio da ...
-    #         "NUM_PROC": 0,  # Número do processo ou auto de infração ao qual a ob...
-    #         "IND_PROC": 0,  # Indicador da origem do processo: 0- Sefaz 1- Justiç...
-    #         "PROC": 0,  # Descrição resumida do processo que embasou o lançamento
-    #         "TXT_COMPL": 0,  # Descrição complementar das obrigações a recolher
-    #         "MES_REF": 0,  # Informe o mês de referência no formato “mmaaaa”
-    #     }
+    @api.model
+    def _odoo_query(self, parent_record, declaration):
+        # parent_record is the E210 row ({"uf": ...}); an obligation only
+        # exists when the ST balance is due
+        vals = st_assessment(st_by_uf(self.env, declaration)[parent_record["uf"]])
+        if vals["VL_ICMS_RECOL_ST"] <= 0:
+            return "SELECT 1 WHERE FALSE", []
+        return "SELECT %s AS uf, %s AS amount", [
+            parent_record["uf"],
+            vals["VL_ICMS_RECOL_ST"],
+        ]
+
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        return {
+            # Tabela 5.4: 002 = ICMS-ST pelas saídas para o Estado; 999 =
+            # outras (ST devida a outra UF, por inscrição de substituto)
+            "COD_OR": "002"
+            if record["uf"] == declaration.company_id.state_id.code
+            else "999",
+            "VL_OR": float(record["amount"]),
+            "DT_VCTO": declaration.dt_vcto_obrigacao_st
+            or declaration.dt_vcto_obrigacao,
+            "COD_REC": declaration.cod_receita_st or declaration.cod_receita,
+            "MES_REF": declaration.DT_INI.strftime("%m%Y"),
+        }
 
 
 class RegistroE300(models.Model):
@@ -4540,6 +4734,22 @@ class RegistroE500(models.Model):
         ]
 
     @api.model
+    def _pull_records_from_odoo(
+        self, kind, level, parent_register=None, parent_record=None, log_msg=None
+    ):
+        """Only an IPI taxpayer (industry or equivalent) writes the E500 tree.
+
+        The PVA refuses it otherwise ("Se não for contribuinte do IPI, não
+        deve apresentar os registros E500 e filhos"), even with a closed IPI
+        assessment in the database.
+        """
+        if self._context["declaration"].IND_ATIV != "0":
+            return
+        return super()._pull_records_from_odoo(
+            kind, level, parent_register, parent_record, log_msg
+        )
+
+    @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
         return {
             # Monthly assessment; the ten-day period (decendial) only applies
@@ -4557,36 +4767,50 @@ class RegistroE510(models.Model):
     _name = "l10n_br_sped.efd_icms_ipi.e510"
     _inherit = "l10n_br_sped.efd_icms_ipi.20.e510"
 
+    VL_CONT_IPI = fields.Monetary(out_required=True, currency_field="brl_currency_id")
+    VL_BC_IPI = fields.Monetary(out_required=True, currency_field="brl_currency_id")
+    VL_IPI = fields.Monetary(out_required=True, currency_field="brl_currency_id")
+
     @api.model
     def _odoo_query(self, parent_record, declaration):
         # Consolidation of the period documents by CFOP and CST_IPI. It reads
-        # the same lines and amounts as the C190 family, because the PVA cross
-        # checks this record against the documents: any line with an IPI tax
-        # situation belongs here, taxed or not.
-        query = """
-            SELECT
-                cfop.code AS cfop,
-                cst.code AS cst_ipi,
-                SUM(fdl.amount_tax_not_included) AS vl_cont_ipi,
-                SUM(fdl.ipi_base) AS vl_bc_ipi,
-                SUM(fdl.ipi_value) AS vl_ipi
-            FROM l10n_br_fiscal_document_line fdl
-            JOIN l10n_br_fiscal_cst cst ON cst.id = fdl.ipi_cst_id
-            LEFT JOIN l10n_br_fiscal_cfop cfop ON cfop.id = fdl.cfop_id
-            WHERE fdl.document_id IN %s
-            GROUP BY cfop.code, cst.code
-            ORDER BY cfop.code, cst.code
+        # the same lines as the C190 family, because the PVA cross checks this
+        # record against the documents: any line with an IPI tax situation
+        # belongs here, taxed or not. The CST is the taxpayer's side of the
+        # operation (`ipi_cst`), hence the grouping in Python.
+        lines = (
+            valued_documents(self.env, declaration)
+            .mapped("fiscal_line_ids")
+            .filtered("ipi_cst_id")
+        )
+        groups = {}
+        for line in lines:
+            key = (line.cfop_id.code or "", ipi_cst(line))
+            groups.setdefault(key, []).append(line.id)
+        rows = sorted(groups.items())
+        if not rows:
+            return "SELECT 1 WHERE FALSE", []
+        values = ", ".join(["(%s, %s, %s)"] * len(rows))
+        params = []
+        for (cfop, cst), line_ids in rows:
+            params += [cfop, cst, line_ids]
+        query = f"""
+            SELECT * FROM (VALUES {values}) AS t(cfop, cst_ipi, line_ids)
+            ORDER BY cfop, cst_ipi
         """
-        return query, [tuple(declaration.fiscal_document_ids.ids) or (0,)]
+        return query, params
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        lines = self.env["l10n_br_fiscal.document.line"].browse(record["line_ids"])
         return {
             "CFOP": record.get("cfop") or "",
             "CST_IPI": record.get("cst_ipi") or "",
-            "VL_CONT_IPI": record.get("vl_cont_ipi") or 0.0,
-            "VL_BC_IPI": record.get("vl_bc_ipi") or 0.0,
-            "VL_IPI": record.get("vl_ipi") or 0.0,
+            # value of the operation, as C190.VL_OPR (Seção 10: no CBS/IBS)
+            "VL_CONT_IPI": sum(lines.mapped("fiscal_amount_total"))
+            - reform_taxes_outside_total(lines),
+            "VL_BC_IPI": sum(lines.mapped("ipi_base")),
+            "VL_IPI": sum(lines.mapped("ipi_value")),
         }
 
 
