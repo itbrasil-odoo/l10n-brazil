@@ -833,7 +833,8 @@ class Registro0150(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         documents = declaration._establishment_documents(parent_record)
-        return [("id", "in", documents.partner_id.ids)]
+        # o parceiro arquivado depois da nota continua sendo o COD_PART dela
+        return [("id", "in", documents.partner_id.ids), ("active", "in", (True, False))]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -872,7 +873,10 @@ class Registro0190(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         lines = declaration._establishment_documents(parent_record).fiscal_line_ids
-        return [("id", "in", (lines.uom_id | lines.product_id.uom_id).ids)]
+        return [
+            ("id", "in", (lines.uom_id | lines.product_id.uom_id).ids),
+            ("active", "in", (True, False)),
+        ]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -968,7 +972,10 @@ class Registro0400(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         lines = declaration._establishment_documents(parent_record).fiscal_line_ids
-        return [("id", "in", lines.fiscal_operation_id.ids)]
+        return [
+            ("id", "in", lines.fiscal_operation_id.ids),
+            ("active", "in", (True, False)),
+        ]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -1415,6 +1422,24 @@ class RegistroC170(models.Model):
             # não cumulativo (erro a partir de 11/2017)
             "COD_CTA": declaration._line_account(record).code or "",
         }
+
+    # CST com base, alíquota e valor obrigatórios no C170 (o PGE recusa o
+    # campo vazio mesmo quando o valor é zero): os que geram contribuição ou
+    # crédito.
+    _CST_WITH_VALUES = ("01", "02", "03", "05") + tuple(
+        str(cst) for cst in range(50, 67)
+    )
+
+    def _write_register_line(self, sped, code, rec, keys, line_count, register_spec):
+        zero_fields = set()
+        for tax in ("PIS", "COFINS"):
+            if rec[f"CST_{tax}"] in self._CST_WITH_VALUES:
+                zero_fields |= {f"VL_BC_{tax}", f"ALIQ_{tax}", f"VL_{tax}"}
+        if zero_fields:
+            self = self.with_context(efd_zero_fields=zero_fields)
+        return super()._write_register_line(
+            sped, code, rec, keys, line_count, register_spec
+        )
 
 
 class RegistroC175(models.Model):
@@ -3833,10 +3858,18 @@ class _RevenueWithoutContributionMixin(models.AbstractModel):
         created = self.browse()
         groups = _revenue_without_contribution(self.env, declaration, tax)
         for cst, group in groups.items():
+            # COD_CTA é obrigatório no M400/M800 de quem apura no não
+            # cumulativo; com mais de uma conta, vai a de maior receita, e o
+            # M410/M810 traz cada conta com o seu valor.
+            by_account = {}
+            for (_nat_rec, cod_cta), value in group["NAT_REC"].items():
+                by_account[cod_cta] = by_account.get(cod_cta, 0.0) + value
+            main_account = max(by_account, key=by_account.get) if by_account else ""
             register = self.create(
                 {
                     f"CST_{tax.upper()}": cst,
                     "VL_TOT_REC": round(group["VL_TOT_REC"], 2),
+                    "COD_CTA": main_account,
                 }
             )
             created |= register

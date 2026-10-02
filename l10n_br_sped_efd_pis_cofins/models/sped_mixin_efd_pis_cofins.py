@@ -31,6 +31,8 @@ class SpecMixinEFDPISCOFINS(models.AbstractModel):
         if field.type in ("integer", "float", "monetary") and not value:
             if self.env.context.get("efd_blank_zero"):
                 return ""
+            if field.name in self.env.context.get("efd_zero_fields", ()):
+                return "0"
             return "0" if getattr(field, "out_required", False) else ""
         if field.type == "monetary":
             return f"{value:.2f}".replace(".", ",")
