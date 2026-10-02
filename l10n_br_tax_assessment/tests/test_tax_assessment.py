@@ -3,7 +3,7 @@
 
 from psycopg2 import IntegrityError
 
-from odoo import fields
+from odoo import Command, fields
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests import tagged
 from odoo.tools import mute_logger
@@ -13,9 +13,12 @@ from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 
 @tagged("post_install", "-at_install")
 class TestTaxAssessment(AccountTestInvoicingCommon):
+    # 18.0: the chart is a class attribute, chart_template_ref is gone
+    chart_template = "generic_coa"
+
     @classmethod
-    def setUpClass(cls, chart_template_ref=None):
-        super().setUpClass(chart_template_ref=chart_template_ref)
+    def setUpClass(cls):
+        super().setUpClass()
         cls.Assessment = cls.env["l10n_br_tax.assessment"]
 
         cls.account_payable = cls.env["account.account"].create(
@@ -23,7 +26,7 @@ class TestTaxAssessment(AccountTestInvoicingCommon):
                 "name": "ICMS a recolher",
                 "code": "TSTPAY",
                 "account_type": "liability_current",
-                "company_id": cls.company_data["company"].id,
+                "company_ids": [Command.set(cls.company_data["company"].ids)],
             }
         )
         cls.account_receivable = cls.env["account.account"].create(
@@ -31,23 +34,23 @@ class TestTaxAssessment(AccountTestInvoicingCommon):
                 "name": "ICMS a recuperar",
                 "code": "TSTREC",
                 "account_type": "asset_current",
-                "company_id": cls.company_data["company"].id,
+                "company_ids": [Command.set(cls.company_data["company"].ids)],
             }
         )
 
     def setUp(self):
         super().setUp()
-        # One group per test: `property_tax_payable_account_id` is
-        # company_dependent (ir.property) and its cache does not follow the
-        # rollback, so a class-level group would let the test that configures
-        # the accounts leak into the one that expects them empty.
+        # One group per test, so the test that configures the accounts never
+        # leaks into the one that expects them empty. (In 16.0 the accounts
+        # were ir.property records whose cache ignored the rollback; in 18.0
+        # they are plain fields of the group, which belongs to one company.)
         self.group = self.env["account.tax.group"].create({"name": "ICMS (teste)"})
 
     def _configure_group(self):
         self.group.with_company(self.company_data["company"]).write(
             {
-                "property_tax_payable_account_id": self.account_payable.id,
-                "property_tax_receivable_account_id": self.account_receivable.id,
+                "tax_payable_account_id": self.account_payable.id,
+                "tax_receivable_account_id": self.account_receivable.id,
             }
         )
 
@@ -350,17 +353,15 @@ class TestTaxAssessment(AccountTestInvoicingCommon):
     def test_post_without_configured_accounts_raises(self):
         """Without the tax group accounts there is no closing.
 
-        The chart of accounts installs GLOBAL `ir.property` records
-        (res_id=False) for `property_tax_payable_account_id` and its sibling, so
-        every new group is born with an account. To exercise the check the
-        company property has to be cleared explicitly, which is the real
-        scenario the guard protects: a database with no chart of accounts, or a
-        company whose property was removed.
+        In 18.0 `tax_payable_account_id` and its sibling are plain fields of
+        the group (no longer company properties). They are cleared explicitly
+        anyway, which is the real scenario the guard protects: a group created
+        by hand, or a company whose chart never filled them.
         """
         self.group.with_company(self.company_data["company"]).write(
             {
-                "property_tax_payable_account_id": False,
-                "property_tax_receivable_account_id": False,
+                "tax_payable_account_id": False,
+                "tax_receivable_account_id": False,
             }
         )
         a = self._new_assessment()
@@ -536,9 +537,12 @@ class TestTaxAssessmentCompute(AccountTestInvoicingCommon):
     reason to exist, had zero coverage. These tests are that bridge.
     """
 
+    # 18.0: the chart is a class attribute, chart_template_ref is gone
+    chart_template = "generic_coa"
+
     @classmethod
-    def setUpClass(cls, chart_template_ref=None):
-        super().setUpClass(chart_template_ref=chart_template_ref)
+    def setUpClass(cls):
+        super().setUpClass()
         cls.company = cls.company_data["company"]
         cls.group = cls.env["account.tax.group"].create({"name": "ICMS (compute)"})
         cls.sale_tax = cls.env["account.tax"].create(
@@ -697,6 +701,9 @@ class TestTaxAssessmentDemo(AccountTestInvoicingCommon):
     month.
     """
 
+    # 18.0: the chart is a class attribute, chart_template_ref is gone
+    chart_template = "generic_coa"
+
     def test_demo_assessment_is_computed_for_the_current_month(self):
         assessment = self.env.ref(
             "l10n_br_tax_assessment.demo_assessment_icms", raise_if_not_found=False
@@ -747,16 +754,19 @@ class TestTaxAssessmentClosingBook(AccountTestInvoicingCommon):
     payment slip on one side and zero (never a negative asset) on the other.
     """
 
+    # 18.0: the chart is a class attribute, chart_template_ref is gone
+    chart_template = "generic_coa"
+
     @classmethod
-    def setUpClass(cls, chart_template_ref=None):
-        super().setUpClass(chart_template_ref=chart_template_ref)
+    def setUpClass(cls):
+        super().setUpClass()
         cls.company = cls.company_data["company"]
         cls.payable = cls.env["account.account"].create(
             {
                 "name": "ICMS a recolher",
                 "code": "TAXPAY",
                 "account_type": "liability_current",
-                "company_id": cls.company.id,
+                "company_ids": [Command.set(cls.company.ids)],
             }
         )
         cls.receivable = cls.env["account.account"].create(
@@ -764,14 +774,14 @@ class TestTaxAssessmentClosingBook(AccountTestInvoicingCommon):
                 "name": "ICMS a recuperar",
                 "code": "TAXREC",
                 "account_type": "asset_current",
-                "company_id": cls.company.id,
+                "company_ids": [Command.set(cls.company.ids)],
             }
         )
         cls.group = cls.env["account.tax.group"].create({"name": "ICMS (encerramento)"})
         cls.group.with_company(cls.company).write(
             {
-                "property_tax_payable_account_id": cls.payable.id,
-                "property_tax_receivable_account_id": cls.receivable.id,
+                "tax_payable_account_id": cls.payable.id,
+                "tax_receivable_account_id": cls.receivable.id,
             }
         )
         # A sale tax books its amount into the payable account (the invoices

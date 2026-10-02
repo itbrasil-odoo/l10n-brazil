@@ -39,15 +39,19 @@
                             <field
                                 name="company_id"
                                 groups="base.group_multi_company"
+                                readonly="state != 'draft'"
                             />
-                            <field name="tax_group_id" />
+                            <field
+                                name="tax_group_id"
+                                readonly="state != 'draft'"
+                            />
                             <field name="tax_domain" />
                             <field name="regime" />
                             <field name="currency_id" invisible="1" />
                         </group>
                         <group>
-                            <field name="date_from" />
-                            <field name="date_to" />
+                            <field name="date_from" readonly="state != 'draft'" />
+                            <field name="date_to" readonly="state != 'draft'" />
                             <field name="move_id" readonly="1" />
                         </group>
                     </group>

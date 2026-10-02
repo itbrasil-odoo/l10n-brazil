@@ -12,12 +12,20 @@
 
       The company is the localization demo `empresa_lucro_presumido`, not
       main_company: that is the one carrying the Brazilian taxes. The group is
-      `l10n_br_coa.tax_group_icms`, the SAME one those taxes use, so that the
-      assessment reads whatever journal items exist in the period.
+      the company's `tax_group_icms`, the SAME one those taxes use, so that the
+      assessment reads whatever journal items exist in the period. In 18.0
+      l10n_br_coa creates one group per company, under the xmlid
+      `l10n_br_coa.<company id>_tax_group_icms`, hence the eval.
+
+      Loaded by the post_init_hook, with the demo invoices: the groups only
+      exist once the chart of the demo company is loaded.
     -->
     <record id="demo_assessment_icms" model="l10n_br_tax.assessment">
         <field name="company_id" ref="l10n_br_base.empresa_lucro_presumido" />
-        <field name="tax_group_id" ref="l10n_br_coa.tax_group_icms" />
+        <field
+            name="tax_group_id"
+            eval="ref('l10n_br_coa.%s_tax_group_icms' % ref('l10n_br_base.empresa_lucro_presumido'))"
+        />
         <field
             name="date_from"
             eval="(DateTime.today() + relativedelta(day=1)).strftime('%Y-%m-%d')"
@@ -64,7 +72,10 @@
     -->
     <record id="demo_assessment_ipi" model="l10n_br_tax.assessment">
         <field name="company_id" ref="l10n_br_base.empresa_lucro_presumido" />
-        <field name="tax_group_id" ref="l10n_br_coa.tax_group_ipi" />
+        <field
+            name="tax_group_id"
+            eval="ref('l10n_br_coa.%s_tax_group_ipi' % ref('l10n_br_base.empresa_lucro_presumido'))"
+        />
         <field
             name="date_from"
             eval="(DateTime.today() + relativedelta(day=1)).strftime('%Y-%m-%d')"
@@ -107,17 +118,22 @@
       apart. Saying it here keeps the demo honest about which regime produced
       those numbers instead of leaving them under "not applicable".
     -->
-    <record id="l10n_br_coa.tax_group_pis" model="account.tax.group">
-        <field name="regime">cumulative</field>
-    </record>
+    <function model="account.tax.group" name="write">
+        <value eval="[ref('l10n_br_coa.%s_tax_group_pis' % ref('l10n_br_base.empresa_lucro_presumido'))]" />
+        <value eval="{'regime': 'cumulative'}" />
+    </function>
 
-    <record id="l10n_br_coa.tax_group_cofins" model="account.tax.group">
-        <field name="regime">cumulative</field>
-    </record>
+    <function model="account.tax.group" name="write">
+        <value eval="[ref('l10n_br_coa.%s_tax_group_cofins' % ref('l10n_br_base.empresa_lucro_presumido'))]" />
+        <value eval="{'regime': 'cumulative'}" />
+    </function>
 
     <record id="demo_assessment_pis" model="l10n_br_tax.assessment">
         <field name="company_id" ref="l10n_br_base.empresa_lucro_presumido" />
-        <field name="tax_group_id" ref="l10n_br_coa.tax_group_pis" />
+        <field
+            name="tax_group_id"
+            eval="ref('l10n_br_coa.%s_tax_group_pis' % ref('l10n_br_base.empresa_lucro_presumido'))"
+        />
         <field
             name="date_from"
             eval="(DateTime.today() + relativedelta(day=1)).strftime('%Y-%m-%d')"
@@ -136,7 +152,10 @@
 
     <record id="demo_assessment_cofins" model="l10n_br_tax.assessment">
         <field name="company_id" ref="l10n_br_base.empresa_lucro_presumido" />
-        <field name="tax_group_id" ref="l10n_br_coa.tax_group_cofins" />
+        <field
+            name="tax_group_id"
+            eval="ref('l10n_br_coa.%s_tax_group_cofins' % ref('l10n_br_base.empresa_lucro_presumido'))"
+        />
         <field
             name="date_from"
             eval="(DateTime.today() + relativedelta(day=1)).strftime('%Y-%m-%d')"

@@ -30,6 +30,19 @@ def load_posted_invoice_demo(env):
     if not company:
         return
 
+    if not env.ref(
+        f"l10n_br_coa.{company.id}_tax_group_icms", raise_if_not_found=False
+    ):
+        # 18.0: the tax groups the demo assesses are created per company by
+        # l10n_br_coa when the chart of the company is loaded, under the xmlid
+        # `l10n_br_coa.<company id>_tax_group_<tax>`. No group, no demo.
+        _logger.warning(
+            "l10n_br_tax_assessment: %s has no Brazilian tax groups, so the "
+            "demo invoices and assessments were not loaded.",
+            company.display_name,
+        )
+        return
+
     journals = env["account.journal"].search(
         [("company_id", "=", company.id), ("type", "in", ("sale", "purchase"))]
     )
@@ -50,15 +63,38 @@ def load_posted_invoice_demo(env):
     env.user.company_ids = [Command.set(env["res.company"].search([]).ids)]
     env.user.company_id = company
     try:
-        tools.convert_file(
-            env,
-            "l10n_br_tax_assessment",
-            "demo/account_invoice_demo.xml",
-            None,
-            mode="init",
-            noupdate=True,
-            kind="demo",
+        # 18.0: posting the demo invoices can fail on a database whose 2026
+        # CBS/IBS taxes have no repartition account (the tax distribution of
+        # the core raises IndexError). The demo is a showcase, not a reason to
+        # abort the install: on failure it is skipped, said out loud, and the
+        # demo tests skip as on a database without demo data.
+        with env.cr.savepoint():
+            tools.convert_file(
+                env,
+                "l10n_br_tax_assessment",
+                "demo/account_invoice_demo.xml",
+                None,
+                mode="init",
+                noupdate=True,
+                kind="demo",
+            )
+            tools.convert_file(
+                env,
+                "l10n_br_tax_assessment",
+                "demo/tax_assessment_demo.xml",
+                None,
+                mode="init",
+                noupdate=True,
+                kind="demo",
+            )
+    except Exception as error:
+        _logger.warning(
+            "l10n_br_tax_assessment: the demo invoices of %s could not be "
+            "posted, so the demo assessments were not loaded: %s",
+            company.display_name,
+            error,
         )
+        return
     finally:
         # The modules installed next expect the main company to be the default
         # one; leaving another company active breaks their own demo.
@@ -71,8 +107,8 @@ def load_posted_invoice_demo(env):
 def _configure_demo_closing_accounts(env, company):
     """Point each assessed group at the accounts its own taxes already use.
 
-    Closing needs to know where the tax sits: `property_tax_payable_account_id`
-    for what is owed and `property_tax_receivable_account_id` for what is
+    Closing needs to know where the tax sits: `tax_payable_account_id`
+    for what is owed and `tax_receivable_account_id` for what is
     recoverable. The chart never fills them, so `action_post` stops on a demo
     database asking for configuration, and the closing entry, which is the
     final artefact of the whole routine, cannot be shown at all.
@@ -87,8 +123,8 @@ def _configure_demo_closing_accounts(env, company):
     for group in groups:
         group_in_company = group.with_company(company)
         if (
-            group_in_company.property_tax_payable_account_id
-            and group_in_company.property_tax_receivable_account_id
+            group_in_company.tax_payable_account_id
+            and group_in_company.tax_receivable_account_id
         ):
             continue
         taxes = env["account.tax"].search(
@@ -98,9 +134,9 @@ def _configure_demo_closing_accounts(env, company):
         payable = _repartition_account(taxes, "sale")
         receivable = _repartition_account(taxes, "purchase")
         if payable:
-            vals["property_tax_payable_account_id"] = payable.id
+            vals["tax_payable_account_id"] = payable.id
         if receivable:
-            vals["property_tax_receivable_account_id"] = receivable.id
+            vals["tax_receivable_account_id"] = receivable.id
         if len(vals) == 2:
             group_in_company.write(vals)
 
