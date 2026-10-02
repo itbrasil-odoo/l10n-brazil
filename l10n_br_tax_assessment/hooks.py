@@ -71,8 +71,8 @@ def load_posted_invoice_demo(env):
 def _configure_demo_closing_accounts(env, company):
     """Point each assessed group at the accounts its own taxes already use.
 
-    Closing needs to know where the tax sits: `property_tax_payable_account_id`
-    for what is owed and `property_tax_receivable_account_id` for what is
+    Closing needs to know where the tax sits: `tax_payable_account_id`
+    for what is owed and `tax_receivable_account_id` for what is
     recoverable. The chart never fills them, so `action_post` stops on a demo
     database asking for configuration, and the closing entry, which is the
     final artefact of the whole routine, cannot be shown at all.
@@ -87,8 +87,8 @@ def _configure_demo_closing_accounts(env, company):
     for group in groups:
         group_in_company = group.with_company(company)
         if (
-            group_in_company.property_tax_payable_account_id
-            and group_in_company.property_tax_receivable_account_id
+            group_in_company.tax_payable_account_id
+            and group_in_company.tax_receivable_account_id
         ):
             continue
         taxes = env["account.tax"].search(
@@ -98,9 +98,9 @@ def _configure_demo_closing_accounts(env, company):
         payable = _repartition_account(taxes, "sale")
         receivable = _repartition_account(taxes, "purchase")
         if payable:
-            vals["property_tax_payable_account_id"] = payable.id
+            vals["tax_payable_account_id"] = payable.id
         if receivable:
-            vals["property_tax_receivable_account_id"] = receivable.id
+            vals["tax_receivable_account_id"] = receivable.id
         if len(vals) == 2:
             group_in_company.write(vals)
 
