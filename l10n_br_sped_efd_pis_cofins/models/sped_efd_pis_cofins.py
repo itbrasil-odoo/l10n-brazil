@@ -972,10 +972,7 @@ class Registro0400(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         lines = declaration._establishment_documents(parent_record).fiscal_line_ids
-        return [
-            ("id", "in", lines.fiscal_operation_id.ids),
-            ("active", "in", (True, False)),
-        ]
+        return [("id", "in", lines.fiscal_operation_id.ids)]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
