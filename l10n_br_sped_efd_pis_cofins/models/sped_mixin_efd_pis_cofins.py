@@ -17,3 +17,19 @@ class SpecMixinEFDPISCOFINS(models.AbstractModel):
     )
 
     state = fields.Selection(related="declaration_id.state")
+
+    def _format_field_value(self, field, value):
+        """Formato numérico do leiaute da EFD-Contribuições.
+
+        - Zero só onde o leiaute exige o campo (``out_required`` do spec); um
+          campo numérico opcional zerado sai em branco, como o PVA espera.
+        - Valor monetário sempre com duas casas e vírgula (Guia Prático 1.35,
+          Seção 3, item 3.1: sem separador de milhar, vírgula como separador
+          decimal). O ``sped_base`` ainda escreve o monetário com ponto quando
+          há centavos ("10.5"), o que o PVA recusa.
+        """
+        if field.type in ("integer", "float", "monetary") and not value:
+            return "0" if getattr(field, "out_required", False) else ""
+        if field.type == "monetary":
+            return f"{value:.2f}".replace(".", ",")
+        return super()._format_field_value(field, value)
