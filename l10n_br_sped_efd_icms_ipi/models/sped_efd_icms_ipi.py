@@ -191,6 +191,115 @@ def st_assessment(bucket):
     }
 
 
+# CSOSN of a Simples Nacional supplier -> CST_ICMS on the declarant's side.
+# Guia Prático, Tabela 4.3.1 (Seção 2): the CSOSN is only for issuing; the
+# entry is written with the CST "sob o enfoque do declarante" (C170 campo 10):
+# goods whose ICMS-ST was charged before become 60, the rest 90.
+CSOSN_TO_CST = {"201": "60", "202": "60", "203": "60", "500": "60"}
+
+
+def icms_cst(line):
+    """CST_ICMS of C170/C190: origin plus the two digits of Tabela B."""
+    code = line.icms_cst_id.code or "00"
+    if len(code) == 3:  # CSOSN
+        code = CSOSN_TO_CST.get(code, "90")
+    return f"{line.icms_origin or '0'}{code}"
+
+
+def values_query(rows, columns):
+    """SQL returning `rows` (tuples) as a result set, for `_odoo_query`.
+
+    The registers whose grouping needs Python (a CST mapped from the CSOSN,
+    a value read from non stored fields) still go through the query path of
+    the base this way.
+    """
+    if not rows:
+        return "SELECT 1 WHERE FALSE", []
+    placeholders = ", ".join(["(" + ", ".join(["%s"] * len(columns)) + ")"] * len(rows))
+    params = [value for row in rows for value in row]
+    return (
+        f"SELECT * FROM (VALUES {placeholders}) AS t({', '.join(columns)})",
+        params,
+    )
+
+
+def has_difal(document, company):
+    """Interstate operation to a final consumer with DIFAL/FCP (C101)."""
+    return document.partner_id.state_id != company.state_id and bool(
+        document.amount_icms_destination_value
+        or document.amount_icms_origin_value
+        or document.amount_icmsfcp_value
+    )
+
+
+def difal_by_uf(env, declaration):
+    """DIFAL/FCP of the period per UF, from the C101 documents (E300/E310).
+
+    Guia Prático, E310 campos 04/06/07/08 (layout from 2017): for the UF of a
+    destination the debits are the VL_ICMS_UF_DEST/VL_FCP_UF_DEST of the exits
+    and the credits the VL_ICMS_UF_REM/VL_FCP_UF_DEST of the returns; for the
+    UF of the 0000 the debits are the VL_ICMS_UF_REM of the exits and the
+    credits the VL_ICMS_UF_DEST of the entries.
+    """
+    company = declaration.company_id
+    own_uf = company.state_id.code
+    totals = {}
+
+    def bucket(uf):
+        return totals.setdefault(
+            uf, {"deb": 0.0, "cred": 0.0, "deb_fcp": 0.0, "cred_fcp": 0.0}
+        )
+
+    for document in valued_documents(env, declaration):
+        if not has_difal(document, company):
+            continue
+        uf = document.partner_id.state_id.code
+        dest = document.amount_icms_destination_value
+        rem = document.amount_icms_origin_value
+        fcp = document.amount_icmsfcp_value
+        if document.fiscal_operation_type == FISCAL_IN:
+            bucket(uf)["cred"] += rem
+            bucket(uf)["cred_fcp"] += fcp
+            if dest:
+                bucket(own_uf)["cred"] += dest
+        else:
+            bucket(uf)["deb"] += dest
+            bucket(uf)["deb_fcp"] += fcp
+            if rem:
+                bucket(own_uf)["deb"] += rem
+    return totals
+
+
+def difal_assessment(bucket):
+    """E310 fields from the period totals of one UF (no prior balance)."""
+    difal = bucket["deb"] - bucket["cred"]
+    fcp = bucket["deb_fcp"] - bucket["cred_fcp"]
+    moved = any(bucket.values())
+    return {
+        "IND_MOV_FCP_DIFAL": "1" if moved else "0",
+        "VL_SLD_CRED_ANT_DIFAL": 0.0,
+        "VL_TOT_DEBITOS_DIFAL": bucket["deb"],
+        "VL_OUT_DEB_DIFAL": 0.0,
+        "VL_TOT_CREDITOS_DIFAL": bucket["cred"],
+        "VL_OUT_CRED_DIFAL": 0.0,
+        "VL_SLD_DEV_ANT_DIFAL": max(difal, 0.0),
+        "VL_DEDUCOES_DIFAL": 0.0,
+        "VL_RECOL_DIFAL": max(difal, 0.0),
+        "VL_SLD_CRED_TRANSPORTAR_DIFAL": max(-difal, 0.0),
+        "DEB_ESP_DIFAL": 0.0,
+        "VL_SLD_CRED_ANT_FCP": 0.0,
+        "VL_TOT_DEB_FCP": bucket["deb_fcp"],
+        "VL_OUT_DEB_FCP": 0.0,
+        "VL_TOT_CRED_FCP": bucket["cred_fcp"],
+        "VL_OUT_CRED_FCP": 0.0,
+        "VL_SLD_DEV_ANT_FCP": max(fcp, 0.0),
+        "VL_DEDUCOES_FCP": 0.0,
+        "VL_RECOL_FCP": max(fcp, 0.0),
+        "VL_SLD_CRED_TRANSPORTAR_FCP": max(-fcp, 0.0),
+        "DEB_ESP_FCP": 0,
+    }
+
+
 def participant_code(partner):
     """COD_PART shared by 0150 and the documents (C100, C500, D100...).
 
@@ -542,7 +651,9 @@ class Registro0150(models.Model):
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
+        # archived records are still referenced by the period documents
         return [
+            ("active", "in", (True, False)),
             # only the participants a valued C100 points at: the PVA refuses
             # an unreferenced 0150 (e.g. the customer of a cancelled NF-e)
             (
@@ -604,7 +715,9 @@ class Registro0190(models.Model):
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
+        # archived records are still referenced by the period documents
         return [
+            ("active", "in", (True, False)),
             # the units of the items (0200.UNID_INV) and of the C170 lines
             ("id", "in", self._referenced_uoms(declaration).ids),
         ]
@@ -635,7 +748,9 @@ class Registro0200(models.Model):
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
+        # archived records are still referenced by the period documents
         return [
+            ("active", "in", (True, False)),
             # only the items a C170 references (Guia Prático, 0200)
             ("id", "in", item_lines(self.env, declaration).mapped("product_id").ids),
         ]
@@ -1248,7 +1363,10 @@ class RegistroC100(models.Model):
             - reform_taxes_outside_total(record.fiscal_line_ids),
             "IND_PGTO": ind_pgto,
             "VL_DESC": record.amount_discount_value,
-            "VL_ABAT_NT": record.amount_financial_discount_value,
+            # the sum of the C170 field 38, which the PVA compares it with
+            "VL_ABAT_NT": sum(
+                record.fiscal_line_ids.mapped("financial_discount_value")
+            ),
             "VL_MERC": record.amount_price_gross,
             # 9 = sem frete when the NF-e module (modFrete) is not there or
             # the document has no transport mode; never the text "False".
@@ -1294,14 +1412,9 @@ class RegistroC101(models.Model):
         # Only the interstate operation to a final consumer with DIFAL (EC
         # 87/2015): the PVA refuses a C101 whose participant is in the UF of
         # the 0000, and it used to come out for every document.
-        document = parent_record
-        if document.partner_id.state_id == declaration.company_id.state_id or not (
-            document.amount_icms_destination_value
-            or document.amount_icms_origin_value
-            or document.amount_icmsfcp_value
-        ):
+        if not has_difal(parent_record, declaration.company_id):
             return [(0, "=", 1)]
-        return [("id", "=", document.id)]
+        return [("id", "=", parent_record.id)]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -1655,7 +1768,7 @@ class RegistroC170(models.Model):
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
         # Format the 3-digit CST (Origin + CST code)
-        cst_icms = f"{record.icms_origin or '0'}{record.icms_cst_code or '00'}"
+        cst_icms = icms_cst(record)
 
         return {
             "NUM_ITEM": index + 1,
@@ -2009,25 +2122,15 @@ class RegistroC190(models.Model):
 
     @api.model
     def _odoo_query(self, parent_record, declaration):
-        # SPED requires grouping by CST, CFOP, and ICMS Aliquot
-        query = """
-            SELECT
-                CONCAT(COALESCE(fdl.icms_origin, '0'), cst.code) AS cst_icms,
-                cfop.code AS cfop,
-                fdl.icms_percent AS aliq_icms,
-                ARRAY_AGG(fdl.id) AS line_ids,
-                SUM(fdl.icms_base) AS vl_bc_icms,
-                SUM(fdl.icms_value) AS vl_icms,
-                SUM(fdl.icmsst_base) AS vl_bc_icms_st,
-                SUM(fdl.icmsst_value) AS vl_icms_st,
-                SUM(fdl.ipi_value) AS vl_ipi
-            FROM l10n_br_fiscal_document_line fdl
-            LEFT JOIN l10n_br_fiscal_cst cst ON cst.id = fdl.icms_cst_id
-            LEFT JOIN l10n_br_fiscal_cfop cfop ON cfop.id = fdl.cfop_id
-            WHERE fdl.document_id = %s
-            GROUP BY cst.code, cfop.code, fdl.icms_percent, fdl.icms_origin
-        """
-        return query, [parent_record.id]
+        # Guia Prático, C190: one record per CST_ICMS + CFOP + ALIQ_ICMS. The
+        # CST is the declarant's (`icms_cst`, a CSOSN becomes 60/90), so the
+        # grouping is done here and handed to the base as a VALUES query.
+        groups = {}
+        for line in parent_record.fiscal_line_ids:
+            key = (icms_cst(line), line.cfop_id.code or "", line.icms_percent or 0.0)
+            groups.setdefault(key, []).append(line.id)
+        rows = [(cst, cfop, aliq, ids) for (cst, cfop, aliq), ids in groups.items()]
+        return values_query(sorted(rows), ("cst_icms", "cfop", "aliq_icms", "line_ids"))
 
     @api.model
     def _vl_opr(self, line_ids):
@@ -2047,17 +2150,18 @@ class RegistroC190(models.Model):
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        lines = self.env["l10n_br_fiscal.document.line"].browse(record["line_ids"])
         return {
             "CST_ICMS": record.get("cst_icms") or "",
             "CFOP": record.get("cfop") or "",
-            "ALIQ_ICMS": record.get("aliq_icms") or 0.0,
-            "VL_OPR": self._vl_opr(record.get("line_ids") or []),
-            "VL_BC_ICMS": record.get("vl_bc_icms") or 0.0,
-            "VL_ICMS": record.get("vl_icms") or 0.0,
-            "VL_BC_ICMS_ST": record.get("vl_bc_icms_st") or 0.0,
-            "VL_ICMS_ST": record.get("vl_icms_st") or 0.0,
-            "VL_RED_BC": 0.0,  # Can also be aggregated in SQL if needed
-            "VL_IPI": record.get("vl_ipi") or 0.0,
+            "ALIQ_ICMS": float(record.get("aliq_icms") or 0.0),
+            "VL_OPR": self._vl_opr(record["line_ids"]),
+            "VL_BC_ICMS": sum(lines.mapped("icms_base")),
+            "VL_ICMS": sum(lines.mapped("icms_value")),
+            "VL_BC_ICMS_ST": sum(lines.mapped("icmsst_base")),
+            "VL_ICMS_ST": sum(lines.mapped("icmsst_value")),
+            "VL_RED_BC": 0.0,
+            "VL_IPI": sum(lines.mapped("ipi_value")),
             "COD_OBS": "",
         }
 
@@ -4585,53 +4689,102 @@ class RegistroE250(models.Model):
 
 
 class RegistroE300(models.Model):
-    """Período de Apuração do ICMS Diferencial de Alíquota – UF Origem/Destino EC 87/15."""
+    """Período de Apuração do FCP e do ICMS Diferencial de Alíquota (EC 87/15).
+
+    One per UF with DIFAL/FCP in a C101 of the period (the PVA requires it:
+    "O registro deve ser informado para a(s) UF(s) ..."). Read from the same
+    documents as the C101; there is no DIFAL running account in
+    l10n_br_tax_assessment yet.
+    """
 
     _description = textwrap.dedent(f"    {__doc__}")
     _name = "l10n_br_sped.efd_icms_ipi.e300"
     _inherit = "l10n_br_sped.efd_icms_ipi.20.e300"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "UF": 0,  # Sigla da unidade da Federação a que se refere à apuração ...
-    #         "DT_INI": 0,  # Data Inicial a que a apuração se refere
-    #         "DT_FIN": 0,  # Data Final a que a apuração se refere
-    #     }
+    @api.model
+    def _odoo_query(self, parent_record, declaration):
+        ufs = sorted(uf for uf in difal_by_uf(self.env, declaration) if uf)
+        return values_query([(uf,) for uf in ufs], ("uf",))
+
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        return {
+            "UF": record["uf"],
+            "DT_INI": declaration.DT_INI,
+            "DT_FIN": declaration.DT_FIN,
+        }
 
 
 class RegistroE310(models.Model):
-    """Apuração do ICMS Diferencial de Alíquota – UF Origem/Destino EC 87/15."""
+    """Apuração do FCP e do ICMS Diferencial de Alíquota (EC 87/15)."""
 
     _description = textwrap.dedent(f"    {__doc__}")
     _name = "l10n_br_sped.efd_icms_ipi.e310"
     _inherit = "l10n_br_sped.efd_icms_ipi.20.e310"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "IND_MOV_FCP_DIFAL": 0,  # Indicador de movimento: 0 - Sem operações ...
-    #         "VL_SLD_CRED_ANT_DIFAL": 0,  # Valor do "Saldo credor de período ante...
-    #         "VL_TOT_DEBITOS_DIFAL": 0,  # Valor total dos débitos por "Saídas e p...
-    #         "VL_OUT_DEB_DIFAL": 0,  # Valor total dos ajustes "Outros débitos ICM...
-    #         "VL_TOT_CREDITOS_DIFAL": 0,  # Valor total dos créditos do ICMS refer...
-    #         "VL_OUT_CRED_DIFAL": 0,  # Valor total de Ajustes "Outros créditos IC...
-    #         "VL_SLD_DEV_ANT_DIFAL": 0,  # Valor total de “Saldo devedor ICMS Dife...
-    #         "VL_DEDUCOES_DIFAL": 0,  # Valor total dos ajustes "Deduções ICMS Dif...
-    #         "VL_RECOL_DIFAL": 0,  # Valor recolhido ou a recolher referente ao IC...
-    #         "VL_SLD_CRED_TRANSPORTAR_DIFAL": 0,  # Saldo credor a transportar par...
-    #         "DEB_ESP_DIFAL": 0,  # Valores recolhidos ou a recolher, extra-apuraç...
-    #         "VL_SLD_CRED_ANT_FCP": 0,  # Valor do "Saldo credor de período anteri...
-    #         "VL_TOT_DEB_FCP": 0,  # Valor total dos débitos FCP por "Saídas e pre...
-    #         "VL_OUT_DEB_FCP": 0,  # Valor total dos ajustes "Outros débitos FCP" ...
-    #         "VL_TOT_CRED_FCP": 0,  # Valor total dos créditos FCP por Entradas
-    #         "VL_OUT_CRED_FCP": 0,  # Valor total de Ajustes "Outros créditos FCP"...
-    #         "VL_SLD_DEV_ANT_FCP": 0,  # Valor total de Saldo devedor FCP antes da...
-    #         "VL_DEDUCOES_FCP": 0,  # Valor total das deduções "FCP"
-    #         "VL_RECOL_FCP": 0,  # Valor recolhido ou a recolher referente ao FCP ...
-    #         "VL_SLD_CRED_TRANSPORTAR_FCP": 0,  # Saldo credor a transportar para ...
-    #         "DEB_ESP_FCP": 0,  # Valores recolhidos ou a recolher, extra-apuração...
-    #     }
+    # Guia Prático, E310: every field is mandatory, a zero is written "0"
+    VL_SLD_CRED_ANT_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_TOT_DEBITOS_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_OUT_DEB_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_TOT_CREDITOS_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_OUT_CRED_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_SLD_DEV_ANT_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_DEDUCOES_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_RECOL_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_SLD_CRED_TRANSPORTAR_DIFAL = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_SLD_CRED_ANT_FCP = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_TOT_DEB_FCP = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_OUT_DEB_FCP = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_TOT_CRED_FCP = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_OUT_CRED_FCP = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_SLD_DEV_ANT_FCP = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_DEDUCOES_FCP = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    VL_RECOL_FCP = fields.Monetary(out_required=True, currency_field="brl_currency_id")
+    VL_SLD_CRED_TRANSPORTAR_FCP = fields.Monetary(
+        out_required=True, currency_field="brl_currency_id"
+    )
+    DEB_ESP_DIFAL = fields.Float(out_required=True)
+    DEB_ESP_FCP = fields.Integer(out_required=True)
+
+    @api.model
+    def _odoo_query(self, parent_record, declaration):
+        return "SELECT %s AS uf", [parent_record["uf"]]
+
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        return difal_assessment(difal_by_uf(self.env, declaration)[record["uf"]])
 
 
 class RegistroE311(models.Model):
@@ -4691,25 +4844,39 @@ class RegistroE313(models.Model):
 
 
 class RegistroE316(models.Model):
-    """Obrigações do ICMS recolhido ou a recolher – Diferencial de Alíquota – UF Origem/Destino EC 87/15."""
+    """Obrigações do ICMS a Recolher - DIFAL e FCP (EC 87/15)."""
 
     _description = textwrap.dedent(f"    {__doc__}")
     _name = "l10n_br_sped.efd_icms_ipi.e316"
     _inherit = "l10n_br_sped.efd_icms_ipi.20.e316"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "COD_OR": 0,  # Código da obrigação recolhida ou a recolher, conforme...
-    #         "VL_OR": 0,  # Valor da obrigação recolhida ou a recolher
-    #         "DT_VCTO": 0,  # Data de vencimento da obrigação
-    #         "COD_REC": 0,  # Código de receita referente à obrigação, próprio da ...
-    #         "NUM_PROC": 0,  # Número do processo ou auto de infração ao qual a ob...
-    #         "IND_PROC": 0,  # Indicador da origem do processo: 0- SEFAZ 1- Justiç...
-    #         "PROC": 0,  # Descrição resumida do processo que embasou o lançamento
-    #         "TXT_COMPL": 0,  # Descrição complementar das obrigações recolhidas o...
-    #         "MES_REF": 0,  # Informe o mês de referência no formato “mmaaaa”
-    #     }
+    @api.model
+    def _odoo_query(self, parent_record, declaration):
+        # parent_record is the E310 row ({"uf": ...}). Guia Prático, E310
+        # campo 12: VL_RECOL + DEB_ESP = sum of the E316.VL_OR; Tabela 5.4:
+        # 000 for the DIFAL, 006 for the FCP.
+        vals = difal_assessment(difal_by_uf(self.env, declaration)[parent_record["uf"]])
+        rows = [
+            (code, amount)
+            for code, amount in (
+                ("000", vals["VL_RECOL_DIFAL"]),
+                ("006", vals["VL_RECOL_FCP"]),
+            )
+            if amount > 0
+        ]
+        return values_query(rows, ("cod_or", "amount"))
+
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        return {
+            "COD_OR": record["cod_or"],
+            "VL_OR": float(record["amount"]),
+            # the revenue code and due date are the destination UF's (GNRE):
+            # configuration of the taxpayer, see cod_receita on the 0000
+            "DT_VCTO": False,
+            "COD_REC": "",
+            "MES_REF": declaration.DT_INI.strftime("%m%Y"),
+        }
 
 
 class RegistroE500(models.Model):
