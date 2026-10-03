@@ -476,3 +476,29 @@ class TestPvaRules(Rules2026Common):
             70, lines=[self._icms_line()], date_in_out="2026-10-03 12:00:00"
         )
         self.assertFalse(self._c100_of(document).DT_E_S)
+
+    def test_header_cod_ver_and_profile(self):
+        """COD_VER has three positions; the profile is the declaration's."""
+        self.assertEqual(self.declaration.IND_PERFIL, "B", "default profile")
+        self.declaration.IND_PERFIL = "A"
+        vals = self.declaration._map_from_odoo(self.company, None, self.declaration)
+        self.assertEqual(vals["COD_VER"], "020")
+        self.assertNotIn("IND_PERFIL", vals, "the pull must not overwrite it")
+
+    def test_0002_only_for_industry(self):
+        self.declaration.IND_ATIV = "1"
+        self.assertFalse(self._pull("l10n_br_sped.efd_icms_ipi.0002"))
+        self.declaration.IND_ATIV = "0"
+        self.assertTrue(self._pull("l10n_br_sped.efd_icms_ipi.0002"))
+
+    def test_cest_and_ncm_without_mask(self):
+        ncm = self.env["l10n_br_fiscal.ncm"].search([("code", "like", ".")], limit=1)
+        cest = self.env["l10n_br_fiscal.cest"].search([("code", "like", ".")], limit=1)
+        if not (ncm and cest):
+            self.skipTest("no masked NCM/CEST in the tables")
+        self.product.write({"ncm_id": ncm.id, "cest_id": cest.id})
+        vals = self.env["l10n_br_sped.efd_icms_ipi.0200"]._map_from_odoo(
+            self.product, None, self.declaration
+        )
+        self.assertNotIn(".", vals["COD_NCM"])
+        self.assertNotIn(".", vals["CEST"])
