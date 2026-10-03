@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="efd_icms_ipi_obligation_list" model="ir.ui.view">
+        <field name="name">l10n_br_sped_efd_icms_ipi.obligation.list</field>
+        <field name="model">l10n_br_sped_efd_icms_ipi.obligation</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="company_id" groups="base.group_multi_company" />
+                <field name="kind" />
+                <field name="state_id" />
+                <field name="cod_receita" />
+                <field name="due_day" />
+                <field name="due_months" />
+                <field name="active" widget="boolean_toggle" />
+            </list>
+        </field>
+    </record>
+    <record id="efd_icms_ipi_obligation_action" model="ir.actions.act_window">
+        <field name="name">Códigos de receita e vencimentos</field>
+        <field name="res_model">l10n_br_sped_efd_icms_ipi.obligation</field>
+        <field name="view_mode">list</field>
+    </record>
+    <menuitem
+        id="efd_icms_ipi_obligation_menu"
+        name="Códigos de receita e vencimentos"
+        parent="efd_icms_ipi"
+        action="efd_icms_ipi_obligation_action"
+        groups="l10n_br_fiscal.group_manager"
+        sequence="90"
+    />
+</odoo>
