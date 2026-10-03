@@ -404,3 +404,45 @@ class TestPvaRules(Rules2026Common):
         self.assertFalse(self._pull("l10n_br_sped.efd_icms_ipi.e500"))
         self.declaration.IND_ATIV = "0"
         self.assertTrue(self._pull("l10n_br_sped.efd_icms_ipi.e500"))
+
+    def test_csosn_of_a_simples_supplier_becomes_the_declarant_cst(self):
+        csosn = self.env["l10n_br_fiscal.cst"].search([("code", "=", "500")], limit=1)
+        if not csosn:
+            self.skipTest("no CSOSN 500 in the CST table")
+        document = self._document(
+            66,
+            fiscal_operation_type="in",
+            issuer="partner",
+            lines=[
+                {
+                    "cfop_id": self.env.ref("l10n_br_fiscal.cfop_2152").id,
+                    "icms_cst_id": csosn.id,
+                    "icms_origin": "0",
+                }
+            ],
+        )
+        c100 = self._c100_of(document)
+        self.assertEqual(c100.reg_C170_ids.CST_ICMS, "060")
+        self.assertEqual(c100.reg_C190_ids.CST_ICMS, "060")
+
+    def test_difal_to_another_uf_feeds_e300_e310(self):
+        other_uf = self.env["res.country.state"].search(
+            [
+                ("country_id", "=", self.env.ref("base.br").id),
+                ("id", "!=", self.company.state_id.id),
+            ],
+            limit=1,
+        )
+        self.partner.state_id = other_uf
+        document = self._document(
+            67,
+            lines=[self._icms_line(icms_destination_value=7.5, icmsfcp_value=1.5)],
+        )
+        c101 = self._c100_of(document).reg_C101_ids
+        self.assertAlmostEqual(c101.VL_ICMS_UF_DEST, 7.5, places=2)
+        e300 = self._pull("l10n_br_sped.efd_icms_ipi.e300")
+        self.assertEqual(e300.mapped("UF"), [other_uf.code])
+        e310 = e300.reg_E310_ids
+        self.assertAlmostEqual(e310.VL_TOT_DEBITOS_DIFAL, 7.5, places=2)
+        self.assertAlmostEqual(e310.VL_RECOL_FCP, 1.5, places=2)
+        self.assertEqual(sorted(e310.reg_E316_ids.mapped("COD_OR")), ["000", "006"])
