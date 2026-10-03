@@ -38,6 +38,14 @@ def _digits(value):
     return misc.punctuation_rm(value or "")
 
 
+def _unit(uom):
+    """UNID (0190, 0200, C170): o código da unidade, até 6 posições.
+
+    O nome ("Unidades") não cabe no campo C 006 e não é o que a nota traz.
+    """
+    return (uom.code or uom.name or "")[:6] if uom else ""
+
+
 # As datas do documento fiscal (document_date, date_in_out) são Datetime em
 # UTC. Uma nota emitida às 22h de 30/09 em Brasília é 01h de 01/10 em UTC: sem
 # converter, ela cai no mês seguinte e sai com a data errada no C100.
@@ -289,25 +297,35 @@ NAT_REC_TABLE_BY_CST = {
 }
 
 
-def _nat_rec(product, cst):
-    """Natureza da receita pelo NCM do produto, quando ela é única.
+def _nat_rec(declaration, product, cst):
+    """Natureza da receita (NAT_REC) do item sem contribuição.
 
-    As naturezas (`l10n_br_fiscal.tax.pis.cofins`) guardam os NCMs a que se
-    aplicam em `ncm_ids`, calculado das faixas de NCM das tabelas da RFB.
+    1. Regra configurada (`l10n_br_sped_efd_pis_cofins.nat_rec.rule`), da
+       empresa ou geral, pelo CST e pelo prefixo de NCM mais longo. É para a
+       natureza que depende do enquadramento legal e não do NCM, como a
+       maior parte da tabela 4.3.15 (sem incidência), que o contador decide.
+    2. A tabela oficial pelo NCM (`l10n_br_fiscal.tax.pis.cofins`, com as
+       faixas de NCM das tabelas 4.3.10 a 4.3.16), quando ela dá uma natureza
+       só.
     """
+    env = declaration.env
+    ncm_code = _digits(product.ncm_id.code) if "ncm_id" in product._fields else ""
+    cache = env.cr.cache.setdefault("efd_pis_cofins_nat_rec", {})
+    key = (declaration.company_id.id, cst, ncm_code)
+    if key in cache:
+        return cache[key]
+    result = env["l10n_br_sped_efd_pis_cofins.nat_rec.rule"]._find(
+        declaration.company_id, cst, ncm_code
+    )
     table = NAT_REC_TABLE_BY_CST.get(cst)
-    ncm = product.ncm_id if "ncm_id" in product._fields else None
-    if not table or not ncm:
-        return ""
-    cache = product.env.cr.cache.setdefault("efd_pis_cofins_nat_rec", {})
-    key = (ncm.id, table)
-    if key not in cache:
-        natures = product.env["l10n_br_fiscal.tax.pis.cofins"].search(
-            [("ncm_ids", "in", ncm.ids), ("sped_table", "=", table)]
+    if not result and table and product.ncm_id:
+        natures = env["l10n_br_fiscal.tax.pis.cofins"].search(
+            [("ncm_ids", "in", product.ncm_id.ids), ("sped_table", "=", table)]
         )
         codes = set(natures.mapped("code"))
-        cache[key] = codes.pop() if len(codes) == 1 else ""
-    return cache[key]
+        result = codes.pop() if len(codes) == 1 else ""
+    cache[key] = result
+    return result
 
 
 def _revenue_without_contribution(env, declaration, tax):
@@ -329,7 +347,7 @@ def _revenue_without_contribution(env, declaration, tax):
         ):
             continue
         fiscal_line = env["l10n_br_fiscal.document.line"].browse(line.res_id)
-        nat_rec = _nat_rec(fiscal_line.product_id, cst)
+        nat_rec = _nat_rec(declaration, fiscal_line.product_id, cst)
         group = groups.setdefault(cst, {"VL_TOT_REC": 0.0, "NAT_REC": OrderedDict()})
         group["VL_TOT_REC"] += line.VL_ITEM
         key = (nat_rec, line.COD_CTA or "")
@@ -492,6 +510,17 @@ class Registro0000(models.Model):
                     for line in doc.fiscal_line_ids
                 )
             )
+            if record._get_cod_inc_trib() == "2":
+                # Exclusivamente cumulativo: a entrada não gera crédito, e o
+                # documento que não gera receita nem crédito não precisa ser
+                # informado (Guia 1.35, Seção 4: "não precisam ser informados
+                # na EFD-Contribuições, documentos que não se refiram a
+                # operações geradoras de receitas ou de créditos"). A
+                # devolução de venda poderia ir com CST 98/99 "para fins de
+                # transparência" (Guia, C100), mas é opcional.
+                documents = documents.filtered(
+                    lambda doc: doc.fiscal_operation_type != FISCAL_IN
+                )
             lines = documents.fiscal_line_ids
             record.fiscal_document_ids = documents
             record.fiscal_document_partner_ids = documents.partner_id
@@ -645,20 +674,6 @@ class Registro0000(models.Model):
             "SUFRAMA": record.l10n_br_isuf_code or "",
             "IND_NAT_PJ": "00",  # Pessoa jurídica em geral (2 fixed positions)
         }
-
-    @api.model
-    def _sped_file_text(self, text):
-        """Texto do arquivo com CR+LF ao fim de TODA linha, inclusive a última.
-
-        Guia 1.35, Seção 1, item g: "Todos os registros devem conter no final
-        de cada linha ... os caracteres CR e LF". Sem o terminador na última
-        linha o PGE recusa a importação (MSG_QUEBRA_ULTIMA_LINHA_INVALIDA).
-        """
-        lines = text.replace("\r\n", "\n").strip("\n").split("\n")
-        return "\r\n".join(lines) + "\r\n"
-
-    def _create_sped_attachment(self, text, bloco=None):
-        return super()._create_sped_attachment(self._sped_file_text(text), bloco)
 
     def _get_validator_class(self):
         from .validator import EfdContribuicoesValidator
@@ -880,7 +895,7 @@ class Registro0190(models.Model):
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
-        return {"UNID": record.code or record.name, "DESCR": record.name}
+        return {"UNID": _unit(record), "DESCR": record.name}
 
 
 class Registro0200(models.Model):
@@ -906,7 +921,7 @@ class Registro0200(models.Model):
             "COD_ITEM": declaration._item_code(record),
             "DESCR_ITEM": record.name,
             "COD_BARRA": record.barcode or "",
-            "UNID_INV": record.uom_id.code or record.uom_id.name or "",
+            "UNID_INV": _unit(record.uom_id),
             "TIPO_ITEM": record.fiscal_type or "99",
             "COD_NCM": ncm_code,
             "COD_GEN": ncm_code[:2],
@@ -1349,6 +1364,55 @@ class RegistroC120(models.Model):
     _name = "l10n_br_sped.efd_pis_cofins.c120"
     _inherit = "l10n_br_sped.efd_pis_cofins.6.c120"
 
+    # A DI/DUIMP vem do grupo DI da NF-e de importação (nfe.40.di, do
+    # l10n_br_nfe), um por item. O C120 vai um por documento de importação
+    # (Guia 1.35: não pode repetir NUM_DOC_IMP no mesmo C100).
+    _odoo_model = "nfe.40.di"
+
+    @api.model
+    def _odoo_domain(self, parent_record, declaration):
+        if (
+            "nfe.40.di" not in self.env
+            or parent_record.state_edoc != "autorizada"
+            or parent_record.fiscal_operation_type != FISCAL_IN
+            or not any(
+                (line.cfop_id.code or "").startswith("3")
+                for line in parent_record.fiscal_line_ids
+            )
+        ):
+            return [("id", "=", 0)]
+        declarations = self.env["nfe.40.di"].search(
+            [("nfe40_DI_prod_id", "in", parent_record.fiscal_line_ids.ids)],
+            order="id",
+        )
+        first_by_number = {}
+        for di in declarations:
+            first_by_number.setdefault(di.nfe40_nDI, di.id)
+        return [("id", "in", list(first_by_number.values()))]
+
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        number = record.nfe40_nDI or ""
+        lines = (
+            self.env["nfe.40.di"]
+            .search(
+                [
+                    ("nfe40_nDI", "=", number),
+                    ("nfe40_DI_prod_id", "in", parent_record.fiscal_line_ids.ids),
+                ]
+            )
+            .mapped("nfe40_DI_prod_id")
+        )
+        return {
+            # 0 = DI, 2 = DUIMP (a partir de 2019, Guia 1.35, C120 campo 02).
+            # O número da DUIMP traz "BR" (26BR00015708790); o da DI é só
+            # numérico.
+            "COD_DOC_IMP": "2" if "BR" in number.upper() else "0",
+            "NUM_DOC_IMP": _digits(number) if "BR" not in number.upper() else number,
+            "VL_PIS_IMP": sum(lines.mapped("pis_value")),
+            "VL_COFINS_IMP": sum(lines.mapped("cofins_value")),
+        }
+
     # @api.model
     # def _map_from_odoo(self, record, parent_record, declaration, index=0):
     #     return {
@@ -1383,7 +1447,7 @@ class RegistroC170(models.Model):
             "COD_ITEM": declaration._item_code(record.product_id),
             "DESCR_COMPL": record.name or "",
             "QTD": record.quantity,
-            "UNID": record.uom_id.code or record.uom_id.name or "",
+            "UNID": _unit(record.uom_id),
             # NT 11/2026: o valor do item não soma CBS, IBS nem IS
             "VL_ITEM": record.price_gross,
             "VL_DESC": record.discount_value,
