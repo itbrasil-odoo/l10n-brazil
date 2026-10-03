@@ -42,8 +42,4 @@ class SpecMixinEFDICMSIPI(models.AbstractModel):
         # (out_required); an optional numeric field is left blank.
         if field.type in ("integer", "float", "monetary") and not value:
             return "0" if getattr(field, "out_required", False) else ""
-        if field.type == "monetary" and value % 1:
-            # The base writes str(value), with a dot; the SPED decimal
-            # separator is the comma, with the two decimals of the layout.
-            return f"{value:.2f}".replace(".", ",")
         return super()._format_field_value(field, value)

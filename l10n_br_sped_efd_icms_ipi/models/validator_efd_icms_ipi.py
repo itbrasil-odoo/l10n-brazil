@@ -6,12 +6,13 @@ from odoo.addons.l10n_br_sped_base.models.validator import SpedValidator
 
 from .sped_efd_icms_ipi import COD_SIT_WITHOUT_VALUES
 
-# Guia Prático 3.2.4, Capítulo II, Seção 1 (Tabela Blocos)
-EFD_ICMS_IPI_BLOCKS = ["0", "B", "C", "D", "E", "G", "H", "K", "1"]
-
 
 class EfdIcmsIpiValidator(SpedValidator):
-    blocks = EFD_ICMS_IPI_BLOCKS
+    """The block order is the base's for kind "efd_icms_ipi" (Guia Prático
+    3.2.4, Capítulo II, Seção 1); this adds the C100 Exceção 1."""
+
+    def __init__(self, text, registers=None, kind="efd_icms_ipi"):
+        super().__init__(text, registers, kind=kind)
 
     def _validate_fields(self, structure):
         """A cancelled, denied or voided C100 carries only its identification.

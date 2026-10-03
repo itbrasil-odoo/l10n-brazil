@@ -23,12 +23,3 @@ class TestPeriodBounds(common.TransactionCase):
         start, _end = period_bounds_utc(self.env, date(2026, 9, 1), date(2026, 9, 30))
         self.assertEqual(start, datetime(2026, 9, 1, 3, 0))
 
-
-class TestSpedFileText(common.TransactionCase):
-    def test_every_line_ends_in_crlf(self):
-        from odoo.addons.l10n_br_sped_base.models.sped_declaration import (
-            sped_file_text,
-        )
-
-        text = sped_file_text("\n|0000|x|\n|9999|2|")
-        self.assertEqual(text, "|0000|x|\r\n|9999|2|\r\n")

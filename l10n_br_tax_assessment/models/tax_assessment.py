@@ -59,6 +59,18 @@ class TaxAssessment(models.Model):
         "lançamentos delas só entram na apuração da matriz se estiverem "
         "aqui. Vazio, a apuração lê só a própria empresa.",
     )
+    branch_company_ids = fields.Many2many(
+        comodel_name="res.company",
+        relation="l10n_br_tax_assessment_branch_rel",
+        column1="assessment_id",
+        column2="company_id",
+        string="Filiais consolidadas",
+        help="Filiais (branches) cujos lançamentos entram nesta apuração. "
+        "PIS e COFINS são apurados pela pessoa jurídica, centralizados na "
+        "matriz: no Odoo as filiais usam os impostos da empresa-mãe, e os "
+        "lançamentos delas só entram na apuração da matriz se estiverem "
+        "aqui. Vazio, a apuração lê só a própria empresa.",
+    )
     tax_group_id = fields.Many2one(
         comodel_name="account.tax.group",
         string="Grupo de imposto",
