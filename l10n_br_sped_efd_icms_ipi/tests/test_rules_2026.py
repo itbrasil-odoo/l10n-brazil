@@ -541,3 +541,13 @@ class TestPvaRules(Rules2026Common):
         self._document(75, lines=[self._icms_line()], partner_id=twin.id)
         codes = self._pull("l10n_br_sped.efd_icms_ipi.0150").mapped("COD_PART")
         self.assertEqual(len(codes), len(set(codes)))
+
+    def test_base_reduction_goes_to_vl_red_bc(self):
+        cst20 = self.env.ref("l10n_br_fiscal.cst_icms_20")
+        document = self._document(
+            76,
+            lines=[self._icms_line(icms_cst_id=cst20.id, icms_base=60.0)],
+        )
+        c190 = self._c100_of(document).reg_C190_ids
+        self.assertAlmostEqual(c190.VL_RED_BC, c190.VL_OPR - 60.0, places=2)
+        self.assertGreater(c190.VL_RED_BC, 0)
