@@ -502,3 +502,20 @@ class TestPvaRules(Rules2026Common):
         )
         self.assertNotIn(".", vals["COD_NCM"])
         self.assertNotIn(".", vals["CEST"])
+
+    def test_0220_for_a_c170_unit_other_than_the_inventory_one(self):
+        unit = self.env.ref("uom.product_uom_unit")
+        dozen = self.env.ref("uom.product_uom_dozen")
+        unit.code = unit.code or "UN"
+        dozen.code = dozen.code or "DZ"
+        self.product.uom_id = unit
+        self._document(
+            71,
+            fiscal_operation_type="in",
+            issuer="partner",
+            lines=[self._icms_line(uom_id=dozen.id)],
+        )
+        reg_0200 = self._pull("l10n_br_sped.efd_icms_ipi.0200")
+        reg_0220 = reg_0200.reg_0220_ids
+        self.assertEqual(reg_0220.UNID_CONV, dozen.code)
+        self.assertAlmostEqual(reg_0220.FAT_CONV, 12.0, places=4)
