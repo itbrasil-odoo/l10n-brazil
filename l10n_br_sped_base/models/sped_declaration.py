@@ -302,7 +302,21 @@ class SpedDeclaration(models.AbstractModel):
 
         return attachments_vals
 
+    @api.model
+    def _sped_file_text(self, text):
+        """Text of the file with CR+LF at the end of EVERY line, the last one too.
+
+        Every SPED layout asks for it (EFD-Contribuições Guia Prático 1.35,
+        Seção 1, item g: "Todos os registros devem conter no final de cada
+        linha ... os caracteres CR e LF"; same rule in the EFD ICMS/IPI and the
+        ECD). Without the terminator on the last line the PGE refuses the
+        import (MSG_QUEBRA_ULTIMA_LINHA_INVALIDA).
+        """
+        lines = text.replace("\r\n", "\n").strip("\n").split("\n")
+        return "\r\n".join(lines) + "\r\n"
+
     def _create_sped_attachment(self, text, bloco=None):
+        text = self._sped_file_text(text)
         kind = self._get_kind()
         if bloco:
             file_name = f"{kind.upper()}-bloco_{bloco}-{self.display_name}.txt"
