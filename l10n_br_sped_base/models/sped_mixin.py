@@ -572,16 +572,18 @@ class SpedMixin(models.AbstractModel):
                 if float_is_zero(value % 1, 6)
                 else str(round(value, 6)).replace(".", ",")
             )
-        elif field.type == "monetary":  # TODO is is usefull? (not used now)
-            return (
-                ""
-                if float_is_zero(value, precision_digits=8)
-                else (
-                    str(int(value))
-                    if float_is_zero(value % 1, precision_digits=8)
-                    else str(value)
-                )
-            )
+        elif field.type == "monetary":
+            # Vírgula como separador decimal e no máximo duas casas, sem
+            # separador de milhar (Guia Prático da EFD-Contribuições 1.35,
+            # Seção 3, item 3.1; mesma regra na EFD ICMS/IPI e na ECD). O
+            # `str(value)` anterior escrevia "10.5", que o PVA recusa. Valor
+            # inteiro pode ir sem casas ("10000" ou "10000,00", pelo mesmo
+            # item), o que mantém os arquivos de demonstração.
+            if float_is_zero(value, precision_digits=8):
+                return ""
+            if float_is_zero(value % 1, precision_digits=8):
+                return str(int(round(value)))
+            return f"{value:.2f}".replace(".", ",")
         else:
             return str(value)
 

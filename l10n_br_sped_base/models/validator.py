@@ -235,8 +235,7 @@ class SpedValidator:
                     self._error(
                         number,
                         "9999",
-                        f"declares {total} line(s) and the file has "
-                        f"{len(structure)}",
+                        f"declares {total} line(s) and the file has {len(structure)}",
                     )
 
 
