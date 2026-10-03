@@ -12,6 +12,7 @@ from odoo.addons.l10n_br_sped_efd_icms_ipi.models.sped_efd_icms_ipi import (
     cod_sit,
     icms_document_totals,
     import_document_code,
+    obligation_code_and_due,
 )
 
 
@@ -650,3 +651,53 @@ class TestPvaRules(Rules2026Common):
         ids = self.env["l10n_br_fiscal.document"].search(domain).ids
         self.assertNotIn(withdrawn.id, ids)
         self.assertIn(relaunched.id, ids)
+
+    def _obligation(self, kind, code, uf=None, day=9, months=1):
+        return self.env["l10n_br_sped_efd_icms_ipi.obligation"].create(
+            {
+                "company_id": self.company.id,
+                "kind": kind,
+                "state_id": uf.id if uf else False,
+                "cod_receita": code,
+                "due_day": day,
+                "due_months": months,
+            }
+        )
+
+    def test_obligation_due_date(self):
+        rule = self._obligation("icms", "1206", day=9)
+        self.assertEqual(str(rule.due_date(self.declaration.DT_FIN)), "2026-10-09")
+        # dia 31 num mês de 30 dias cai no último dia
+        rule.due_day = 31
+        self.assertEqual(str(rule.due_date(self.declaration.DT_FIN)), "2026-10-31")
+        rule.due_months = 2
+        self.assertEqual(str(rule.due_date(self.declaration.DT_FIN)), "2026-11-30")
+
+    def test_obligation_by_uf_and_typed_value_wins(self):
+        sp = self.env.ref("base.state_br_sp")
+        self._obligation("difal", "100102")
+        self._obligation("difal", "063-2", uf=sp, day=15)
+        code, due = obligation_code_and_due(self.env, self.declaration, "difal", "SP")
+        self.assertEqual((code, str(due)), ("063-2", "2026-10-15"))
+        code, _due = obligation_code_and_due(self.env, self.declaration, "difal", "RJ")
+        self.assertEqual(code, "100102", "sem regra da UF, vale a regra geral")
+        code, due = obligation_code_and_due(
+            self.env, self.declaration, "difal", "SP", "999", self.declaration.DT_FIN
+        )
+        self.assertEqual(code, "999", "o digitado na declaração vence")
+
+    def test_st_obligation_from_the_company_rule(self):
+        self.partner.state_id = self.company.state_id
+        self._document(
+            82,
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_5405").id,
+                    icmsst_value=10.0,
+                )
+            ],
+        )
+        self._obligation("st", "2204", uf=self.company.state_id, day=9)
+        e250 = self._pull("l10n_br_sped.efd_icms_ipi.e200").reg_E210_ids.reg_E250_ids
+        self.assertEqual(e250.COD_REC, "2204")
+        self.assertEqual(str(e250.DT_VCTO), "2026-10-09")
