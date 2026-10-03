@@ -393,6 +393,12 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
             arch,
         )
 
+    def test_attachment_lines_end_with_crlf(self):
+        """CR+LF after every register, the last one included."""
+        vals = self.declaration._create_sped_attachment("|0000|x|\n|9999|2|")
+        content = base64.b64decode(vals["datas"])
+        self.assertEqual(content, b"|0000|x|\r\n|9999|2|\r\n")
+
     def test_failed_pull_blocks_the_file(self):
         """Register whose pull failed would vanish from a well-formed file."""
         declaration = self.declaration
@@ -532,7 +538,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|I015|DATA_BLOCO_I_LINE_3|...|",
                 "|I990|CLOSE_BLOCO_I|...|",
             ]
-            self.assertEqual(content_i, "\n".join(expected_content_i_lines))
+            self.assertEqual(content_i, "\r\n".join(expected_content_i_lines))
 
             # Check Bloco J
             att_j = attachments.filtered(
@@ -546,7 +552,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|J930|DATA_BLOCO_J_LINE_2|...|",
                 "|J990|CLOSE_BLOCO_J|...|",
             ]
-            self.assertEqual(content_j, "\n".join(expected_content_j_lines))
+            self.assertEqual(content_j, "\r\n".join(expected_content_j_lines))
 
             # Check Bloco C
             att_c = attachments.filtered(
@@ -561,7 +567,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|C100|DATA_BLOCO_C_LINE_3|...|",
                 "|C990|CLOSE_BLOCO_C|...|",
             ]
-            self.assertEqual(content_c, "\n".join(expected_content_c_lines))
+            self.assertEqual(content_c, "\r\n".join(expected_content_c_lines))
 
             # Test _create_sped_attachment directly
             single_attachment_val = declaration._create_sped_attachment(
@@ -923,9 +929,10 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         text = "|P200|1|DISCRIMINA\u00c7\u00c3O DA RECEITA BRUTA||\n"
         vals = self.declaration._create_sped_attachment(text)
         stored = base64.b64decode(vals["datas"])
-        self.assertEqual(stored, text.encode("iso-8859-1"))
+        # the file lines end with CR+LF
+        self.assertEqual(stored, text.replace("\n", "\r\n").encode("iso-8859-1"))
         # one byte per accented character, no utf-8 marker in the Latin range
-        self.assertEqual(len(stored), len(text))
+        self.assertEqual(len(stored), len(text) + 1)
         self.assertNotIn(b"\xc3\x87", stored)
 
     def test_character_outside_latin1_does_not_abort(self):
@@ -933,7 +940,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         text = "|I250|Taxa \u20ac de servico|\n"
         vals = self.declaration._create_sped_attachment(text)
         stored = base64.b64decode(vals["datas"])
-        self.assertEqual(len(stored), len(text))
+        self.assertEqual(len(stored), len(text) + 1)  # + CR
         self.assertIn(b"?", stored)
 
     def test_import_reads_latin1(self):
