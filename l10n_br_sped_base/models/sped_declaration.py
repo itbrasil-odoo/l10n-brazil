@@ -21,6 +21,16 @@ _logger = logging.getLogger(__name__)
 DEFAULT_TZ = "America/Sao_Paulo"
 
 
+def sped_file_text(text):
+    """The text as the government validators read a SPED file.
+
+    Every line, the last one included, ends in CRLF: the PVA of the EFD
+    ICMS/IPI refuses a file whose last line has no line break.
+    """
+    lines = text.replace("\r\n", "\n").strip("\n").split("\n")
+    return "\r\n".join(lines) + "\r\n"
+
+
 def period_bounds_utc(env, date_from, date_to):
     """UTC datetimes [start, end) covering local days date_from..date_to.
 
@@ -315,7 +325,9 @@ class SpedDeclaration(models.AbstractModel):
             # encode(); errors="replace" keeps a character outside Latin-1
             # pasted in some journal item label from aborting the whole
             # file generation
-            "datas": base64.b64encode(text.encode(SPED_ENCODING, errors="replace")),
+            "datas": base64.b64encode(
+                sped_file_text(text).encode(SPED_ENCODING, errors="replace")
+            ),
             "mimetype": "application/txt",
             "type": "binary",
         }
