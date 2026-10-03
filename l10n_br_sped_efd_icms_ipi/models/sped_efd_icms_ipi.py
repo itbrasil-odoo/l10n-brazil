@@ -1496,12 +1496,12 @@ class RegistroC110(models.Model):
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
-        # Generate a C110 block for each related document found in C100. An
-        # NF-e of the taxpayer goes out without it (Exceção 2: C110 only at
-        # the state's discretion, and it needs a 0450 code).
-        if not has_items(parent_record):
-            return [(0, "=", 1)]
-        return [("document_id", "=", parent_record.id)]
+        # Not written: C110 needs a 0450 code (COD_INF) and its C113 the
+        # participant, series, number and date of the referenced document,
+        # which the NF-e reference (refNFe) does not carry beyond the key. The
+        # PVA refused every one of them; neither register is mandatory, and
+        # an NF-e of the taxpayer never has them (Exceção 2).
+        return [(0, "=", 1)]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -2178,6 +2178,24 @@ class RegistroC190(models.Model):
         return values_query(sorted(rows), ("cst_icms", "cfop", "aliq_icms", "line_ids"))
 
     @api.model
+    def _vl_red_bc(self, record, lines):
+        """Amount left out of the ICMS base by a base reduction.
+
+        Guia Prático, C190 campo 10: greater than zero when CST ends in 20 or
+        70 (the PVA warns otherwise); the value of the operation minus the
+        ICMS base and what is added on top of the goods (ST and IPI).
+        """
+        if (record.get("cst_icms") or "")[-2:] not in ("20", "70"):
+            return 0.0
+        reduced = (
+            self._vl_opr(record["line_ids"])
+            - sum(lines.mapped("icms_base"))
+            - sum(lines.mapped("icmsst_value"))
+            - sum(lines.mapped("ipi_value"))
+        )
+        return max(reduced, 0.0)
+
+    @api.model
     def _vl_opr(self, line_ids):
         """Value of the operation of the CST/CFOP/rate group.
 
@@ -2205,7 +2223,7 @@ class RegistroC190(models.Model):
             "VL_ICMS": sum(lines.mapped("icms_value")),
             "VL_BC_ICMS_ST": sum(lines.mapped("icmsst_base")),
             "VL_ICMS_ST": sum(lines.mapped("icmsst_value")),
-            "VL_RED_BC": 0.0,
+            "VL_RED_BC": self._vl_red_bc(record, lines),
             "VL_IPI": sum(lines.mapped("ipi_value")),
             "COD_OBS": "",
         }
