@@ -71,7 +71,11 @@ class Rules2026Common(common.TransactionCase):
                 "fiscal_operation_type": "out",
                 "issuer": "company",
                 # the document totals are only computed under an operation
-                "fiscal_operation_id": self.env.ref("l10n_br_fiscal.fo_venda").id,
+                "fiscal_operation_id": self.env.ref(
+                    "l10n_br_fiscal.fo_compras"
+                    if vals.get("fiscal_operation_type") == "in"
+                    else "l10n_br_fiscal.fo_venda"
+                ).id,
                 # 30/09 21:30 in Brasilia is already 01/10 in UTC: the period
                 # bounds and DT_DOC have to read it as September.
                 "document_date": "2026-10-01 00:30:00",
@@ -446,3 +450,29 @@ class TestPvaRules(Rules2026Common):
         self.assertAlmostEqual(e310.VL_TOT_DEBITOS_DIFAL, 7.5, places=2)
         self.assertAlmostEqual(e310.VL_RECOL_FCP, 1.5, places=2)
         self.assertEqual(sorted(e310.reg_E316_ids.mapped("COD_OR")), ["000", "006"])
+
+    def test_entry_belongs_to_the_period_of_its_entry_date(self):
+        received_later = self._document(
+            68,
+            fiscal_operation_type="in",
+            issuer="partner",
+            lines=[self._icms_line()],
+            date_in_out="2026-10-05 12:00:00",
+        )
+        received_now = self._document(
+            69,
+            fiscal_operation_type="in",
+            issuer="partner",
+            lines=[self._icms_line()],
+            document_date="2026-08-28 12:00:00",
+            date_in_out="2026-09-02 12:00:00",
+        )
+        pulled = self._pull_c100().mapped("res_id")
+        self.assertNotIn(received_later.id, pulled)
+        self.assertIn(received_now.id, pulled)
+
+    def test_exit_after_the_period_leaves_dt_e_s_empty(self):
+        document = self._document(
+            70, lines=[self._icms_line()], date_in_out="2026-10-03 12:00:00"
+        )
+        self.assertFalse(self._c100_of(document).DT_E_S)

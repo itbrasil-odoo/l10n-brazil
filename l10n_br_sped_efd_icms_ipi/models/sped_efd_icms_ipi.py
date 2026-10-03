@@ -18,6 +18,7 @@ from odoo.addons.l10n_br_fiscal.constants.fiscal import (
     DOCUMENT_ISSUER_COMPANY,
     FISCAL_IN,
 )
+from odoo.addons.l10n_br_sped_base.models.sped_declaration import period_bounds_utc
 from odoo.addons.l10n_br_sped_base.models.sped_mixin import (
     EDITABLE_ON_DRAFT,
     LAYOUT_VERSIONS,
@@ -1281,12 +1282,36 @@ class RegistroC100(models.Model):
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
-        documents = self.env["l10n_br_fiscal.document"].search(
+        Document = self.env["l10n_br_fiscal.document"]
+        models_c100 = ("01", "1B", "04", "55", "65")
+        start, end = period_bounds_utc(self.env, declaration.DT_INI, declaration.DT_FIN)
+        documents = Document.search(
             [
                 ("id", "in", declaration.fiscal_document_ids.ids),
-                ("document_type_id.code", "in", ("01", "1B", "04", "55", "65")),
+                ("document_type_id.code", "in", models_c100),
             ]
         )
+        # Guia Prático, C100 campo 11: an ENTRY belongs to the period of its
+        # entry date (DT_E_S), which the PVA requires to be within the 0000.
+        # An entry issued in the period and received after it goes to the
+        # next file; one issued before and received in it comes into this one.
+        entries_late = documents.filtered(
+            lambda doc: doc.fiscal_operation_type == FISCAL_IN
+            and doc.date_in_out
+            and doc.date_in_out >= end
+        )
+        entries_early = Document.search(
+            [
+                ("company_id", "=", declaration.company_id.id),
+                ("document_type_id.code", "in", models_c100),
+                ("state_edoc", "in", ("autorizada", "cancelada", "denegada")),
+                ("fiscal_operation_type", "=", FISCAL_IN),
+                ("document_date", "<", start),
+                ("date_in_out", ">=", start),
+                ("date_in_out", "<", end),
+            ]
+        )
+        documents = (documents - entries_late) | entries_early
         # Guia Prático 3.2.4, C100: a document that carries only the new
         # taxes of the reform (CBS/IBS/IS) and no ICMS nor IPI is not bookkept.
         documents = documents.filtered(lambda doc: not has_only_reform_taxes(doc))
@@ -1295,6 +1320,7 @@ class RegistroC100(models.Model):
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
         situation = cod_sit(record)
+        dt_e_s = local_date(record, record.date_in_out)
         if record.fiscal_operation_type == FISCAL_IN:
             ind_oper = "0"
         else:
@@ -1356,7 +1382,9 @@ class RegistroC100(models.Model):
             # CNPJ): written as they are, never as a number.
             "CHV_NFE": record.document_key,
             "DT_DOC": local_date(record, record.document_date),
-            "DT_E_S": local_date(record, record.date_in_out),
+            # Guia Prático, C100 campo 11: an exit whose date is after the
+            # period end leaves the field empty
+            "DT_E_S": dt_e_s if not (dt_e_s and dt_e_s > declaration.DT_FIN) else False,
             # Guia Prático 3.2.4, Seção 10 and C100 field 12: in 2026 the
             # total of the document leaves CBS, IBS and IS out.
             "VL_DOC": record.fiscal_amount_total
