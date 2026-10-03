@@ -384,6 +384,16 @@ class Registro0000(models.Model):
         default="0",
     )
 
+    # Perfil de apresentação (Guia Prático, 0000 campo 14): assigned by the
+    # state to each taxpayer, MG puts most of them in B (RICMS/MG, Anexo V).
+    # Editable on the declaration and preserved by the pull.
+    IND_PERFIL = fields.Selection(
+        [("A", "Perfil A"), ("B", "Perfil B"), ("C", "Perfil C")],
+        string="Perfil de apresentação do arquivo fiscal",
+        default="B",
+        required=True,
+    )
+
     cod_obrigacao = fields.Selection(
         [
             ("000", "ICMS a recolher"),
@@ -518,13 +528,8 @@ class Registro0000(models.Model):
             "IM": misc.punctuation_rm(record.l10n_br_im_code or ""),
             "SUFRAMA": record.l10n_br_isuf_code
             or "",  # Inscrição da entidade na SUFRAMA
-            # Perfil de apresentação: the state decides it per taxpayer (MG puts
-            # most of them in B), so the one chosen on a saved declaration wins.
-            # A declaration being created (default_get) is not read, or the
-            # read would call default_get again.
-            "IND_PERFIL": (declaration._origin.IND_PERFIL or "A")
-            if declaration._origin
-            else "A",
+            # IND_PERFIL is NOT mapped: it is the declaration's own field (the
+            # state assigns the profile), and the pull must not overwrite it.
             # "IND_ATIV": (will use declaration field directly),
         }
 
