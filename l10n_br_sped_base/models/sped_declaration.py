@@ -9,6 +9,7 @@ from io import StringIO
 from lxml.builder import E
 
 from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 from .sped_mixin import LAYOUT_VERSIONS, SPED_ENCODING
 
@@ -58,6 +59,15 @@ class SpedDeclaration(models.AbstractModel):
     )
 
     split_sped_by_bloco = fields.Boolean()
+
+    pull_error = fields.Text(
+        string="Pull errors",
+        readonly=True,
+        copy=False,
+        help="Registers whose pull from Odoo failed in the last 'Pull Registers "
+        "from Odoo'. While there is any, the SPED file is not generated: the "
+        "register would simply be missing from a file that still looks valid.",
+    )
 
     debug = fields.Boolean(
         help=(
@@ -212,6 +222,7 @@ class SpedDeclaration(models.AbstractModel):
                     f"<p>0000: {self._odoo_model} → {origem.display_name}</p>"
                 )
 
+        errors = []
         for register_model in top_registers:  # Iterate over models, not instances
             try:
                 with self.env.cr.savepoint():
@@ -227,6 +238,12 @@ class SpedDeclaration(models.AbstractModel):
                     "<p style='color:red;'>Error "
                     f"processing {register_model._name}: {e}</p>"
                 )
+                errors.append(f"{register_model._name}: {e}")
+        # A register whose pull failed is simply ABSENT from the file, and the
+        # structural validator cannot tell an absent register from one that
+        # has no data (a lost 0140 still makes a well-formed file). So the
+        # failure is kept on the declaration and blocks the file generation.
+        self.pull_error = "\n".join(errors) or False
         self.message_post(body=log_msg.getvalue())
 
     def button_flush_registers(self):
@@ -245,6 +262,15 @@ class SpedDeclaration(models.AbstractModel):
     def button_create_sped_files(self):
         """Generate and attach the SPED file."""
         self.ensure_one()
+        if self.pull_error:
+            raise UserError(
+                _(
+                    "The last pull from Odoo failed for these registers, which "
+                    "would be missing from the file. Fix the cause and pull "
+                    "again before generating the SPED file:\n%s"
+                )
+                % self.pull_error
+            )
         sped_txt = self._generate_sped_text()
 
         if self.split_sped_by_bloco:
