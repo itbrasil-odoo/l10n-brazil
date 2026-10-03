@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="nat_rec_rule_list" model="ir.ui.view">
+        <field name="model">l10n_br_sped_efd_pis_cofins.nat_rec.rule</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="company_id" groups="base.group_multi_company" />
+                <field name="cst" />
+                <field name="ncm_prefix" />
+                <field name="nat_rec" />
+                <field name="note" />
+            </list>
+        </field>
+    </record>
+
+    <record id="nat_rec_rule_action" model="ir.actions.act_window">
+        <field name="name">Natureza da Receita (M410/M810)</field>
+        <field name="res_model">l10n_br_sped_efd_pis_cofins.nat_rec.rule</field>
+        <field name="view_mode">list</field>
+    </record>
+    <menuitem
+        action="nat_rec_rule_action"
+        parent="efd_pis_cofins"
+        id="nat_rec_rule_menu"
+        sequence="1"
+    />
+</odoo>
