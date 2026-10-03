@@ -30,9 +30,21 @@ come back once the spec is regenerated with the right sizes.
 
 from collections import defaultdict
 
-# ECF blocks in the official order. Block 0 opens with 0000 and closes with
-# 0990; the other blocks open with <block>001 and close with <block>990.
-BLOCKS = ["0", "E", "J", "K", "L", "M", "N", "P", "Q", "T", "U", "V", "W", "X", "Y"]
+# Blocks of each bookkeeping in the official order (block 9 always closes the
+# file). Block 0 opens with 0000 and closes with 0990; the other blocks open
+# with <block>001 and close with <block>990.
+BLOCKS_BY_KIND = {
+    # ECF, Manual de Orientação do Leiaute
+    "ecf": ["0", "E", "J", "K", "L", "M", "N", "P", "Q", "T", "U", "V", "W", "X", "Y"],
+    # ECD, leiaute 9
+    "ecd": ["0", "C", "I", "J", "K"],
+    # EFD ICMS/IPI, Guia Prático 3.2.x, Seção 2
+    "efd_icms_ipi": ["0", "B", "C", "D", "E", "G", "H", "K", "1"],
+    # EFD-Contribuições, Guia Prático 1.35, Seção 1
+    "efd_pis_cofins": ["0", "A", "C", "D", "F", "I", "M", "P", "1"],
+}
+# kept for compatibility: the validator was written for the ECF
+BLOCKS = BLOCKS_BY_KIND["ecf"]
 
 
 class ValidationIssue:
@@ -58,11 +70,16 @@ class SpedValidator:
         spec, used to check the count, the requiredness and the format of
         the fields. It can be omitted, in which case the field checks are
         skipped.
+    :param kind: bookkeeping kind (``ecf``, ``ecd``, ``efd_icms_ipi``,
+        ``efd_pis_cofins``), which decides the official block order. The ECF
+        order is the default, as before.
     """
 
-    def __init__(self, text, registers=None):
+    def __init__(self, text, registers=None, kind="ecf"):
         self.text = text
         self.registers = registers or {}
+        self.kind = kind
+        self.blocks = BLOCKS_BY_KIND[kind]
         self.issues = []
         self.lines = [
             line for line in text.replace("\r\n", "\n").split("\n") if line.strip()
@@ -149,7 +166,7 @@ class SpedValidator:
                     f"block {block} reappears after it was already closed",
                 )
 
-        expected = [block for block in BLOCKS + ["9"] if block in seen]
+        expected = [block for block in self.blocks + ["9"] if block in seen]
         if seen != expected:
             self._error(
                 0,
@@ -158,7 +175,7 @@ class SpedValidator:
             )
 
         codes = {code for _number, code, _fields in structure}
-        for block in BLOCKS:
+        for block in self.blocks:
             if block not in seen:
                 continue
             opening = "0001" if block == "0" else f"{block}001"
