@@ -99,6 +99,24 @@ def valued_documents(env, declaration):
     )
 
 
+def entry_withdrawn(document):
+    """A third party's document whose every invoice was cancelled in Odoo.
+
+    This is not a rule of the Guia Prático: it is how the stores undo an entry
+    typed wrong. They cancel the vendor bill and type the same NF-e again, so
+    the first fiscal document stays "autorizada" (it is a third party's NF-e,
+    nobody cancels it at the SEFAZ) with no bill behind it, sometimes without
+    number or key. Bookkeeping it would declare the purchase twice, or, with
+    no number, make the PVA refuse the C100 (NUM_DOC and CHV_NFE are
+    mandatory). A document with no bill at all is kept: some entries are
+    fiscal only.
+    """
+    if document.issuer == DOCUMENT_ISSUER_COMPANY or "move_ids" not in document:
+        return False
+    moves = document.move_ids
+    return bool(moves) and all(move.state == "cancel" for move in moves)
+
+
 def has_items(document):
     """Whether the document is written with its items (C170).
 
@@ -1452,6 +1470,7 @@ class RegistroC100(models.Model):
         documents = documents.filtered(
             lambda doc: not has_only_reform_taxes(doc)
             and doc.state_edoc not in ("denegada", "inutilizada")
+            and not entry_withdrawn(doc)
         )
         return [("id", "in", documents.ids)]
 
