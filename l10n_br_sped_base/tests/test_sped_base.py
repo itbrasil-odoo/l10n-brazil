@@ -499,7 +499,8 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|I015|DATA_BLOCO_I_LINE_3|...|",
                 "|I990|CLOSE_BLOCO_I|...|",
             ]
-            self.assertEqual(content_i, "\n".join(expected_content_i_lines))
+            # every line ends in CRLF (sped_file_text)
+            self.assertEqual(content_i, "\r\n".join(expected_content_i_lines))
 
             # Check Bloco J
             att_j = attachments.filtered(
@@ -513,7 +514,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|J930|DATA_BLOCO_J_LINE_2|...|",
                 "|J990|CLOSE_BLOCO_J|...|",
             ]
-            self.assertEqual(content_j, "\n".join(expected_content_j_lines))
+            self.assertEqual(content_j, "\r\n".join(expected_content_j_lines))
 
             # Check Bloco C
             att_c = attachments.filtered(
@@ -528,7 +529,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|C100|DATA_BLOCO_C_LINE_3|...|",
                 "|C990|CLOSE_BLOCO_C|...|",
             ]
-            self.assertEqual(content_c, "\n".join(expected_content_c_lines))
+            self.assertEqual(content_c, "\r\n".join(expected_content_c_lines))
 
             # Test _create_sped_attachment directly
             single_attachment_val = declaration._create_sped_attachment(
@@ -887,7 +888,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         mojibake: the ECF PVA shows "DISCRIMINA\u00c7\u00c3O" as
         "DISCRIMINA\u00c3\u0083O" and flags the whole line.
         """
-        text = "|P200|1|DISCRIMINA\u00c7\u00c3O DA RECEITA BRUTA||\n"
+        text = "|P200|1|DISCRIMINA\u00c7\u00c3O DA RECEITA BRUTA||\r\n"
         vals = self.declaration._create_sped_attachment(text)
         stored = base64.b64decode(vals["datas"])
         self.assertEqual(stored, text.encode("iso-8859-1"))
@@ -897,7 +898,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
 
     def test_character_outside_latin1_does_not_abort(self):
         """A symbol pasted in some label cannot block the whole file."""
-        text = "|I250|Taxa \u20ac de servico|\n"
+        text = "|I250|Taxa \u20ac de servico|\r\n"
         vals = self.declaration._create_sped_attachment(text)
         stored = base64.b64decode(vals["datas"])
         self.assertEqual(len(stored), len(text))
