@@ -331,6 +331,23 @@ def accounting_divergence(env, declaration, assessment):
     return differences
 
 
+def obligation_code_and_due(env, declaration, kind, uf_code, code=None, due=None):
+    """COD_REC and DT_VCTO of an obligation (E116, E250, E316).
+
+    What is typed on the declaration wins; otherwise the company's rule for
+    the obligation and UF (`l10n_br_sped_efd_icms_ipi.obligation`). Guia
+    Prático 3.2.4: the code is "próprio da unidade da federação" and the due
+    date follows the UF's law, so neither is derived by the module.
+    """
+    rule = env["l10n_br_sped_efd_icms_ipi.obligation"].find(
+        declaration.company_id, kind, uf_code
+    )
+    return (
+        code or (rule.cod_receita if rule else ""),
+        due or (rule.due_date(declaration.DT_FIN) if rule else False),
+    )
+
+
 # CSOSN of a Simples Nacional supplier -> CST_ICMS on the declarant's side.
 # Guia Prático, Tabela 4.3.1 (Seção 2): the CSOSN is only for issuing; the
 # entry is written with the CST "sob o enfoque do declarante" (C170 campo 10):
@@ -4731,14 +4748,22 @@ class RegistroE116(models.Model):
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        code, due = obligation_code_and_due(
+            self.env,
+            declaration,
+            "icms",
+            declaration.company_id.state_id.code,
+            declaration.cod_receita,
+            declaration.dt_vcto_obrigacao,
+        )
         return {
             "COD_OR": declaration.cod_obrigacao,
             "VL_OR": sum(
                 e110_values(self.env, declaration, record)[field]
                 for field in ("VL_ICMS_RECOLHER", "DEB_ESP")
             ),
-            "DT_VCTO": declaration.dt_vcto_obrigacao,
-            "COD_REC": declaration.cod_receita,
+            "DT_VCTO": due,
+            "COD_REC": code,
             "MES_REF": record.date_from.strftime("%m%Y"),
         }
 
@@ -4885,16 +4910,24 @@ class RegistroE250(models.Model):
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        own_uf = record["uf"] == declaration.company_id.state_id.code
+        code, due = obligation_code_and_due(
+            self.env,
+            declaration,
+            "st",
+            record["uf"],
+            (declaration.cod_receita_st or declaration.cod_receita) if own_uf else None,
+            (declaration.dt_vcto_obrigacao_st or declaration.dt_vcto_obrigacao)
+            if own_uf
+            else None,
+        )
         return {
             # Tabela 5.4: 002 = ICMS-ST pelas saídas para o Estado; 999 =
             # outras (ST devida a outra UF, por inscrição de substituto)
-            "COD_OR": "002"
-            if record["uf"] == declaration.company_id.state_id.code
-            else "999",
+            "COD_OR": "002" if own_uf else "999",
             "VL_OR": float(record["amount"]),
-            "DT_VCTO": declaration.dt_vcto_obrigacao_st
-            or declaration.dt_vcto_obrigacao,
-            "COD_REC": declaration.cod_receita_st or declaration.cod_receita,
+            "DT_VCTO": due,
+            "COD_REC": code,
             "MES_REF": declaration.DT_INI.strftime("%m%Y"),
         }
 
@@ -5079,13 +5112,19 @@ class RegistroE316(models.Model):
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        code, due = obligation_code_and_due(
+            self.env,
+            declaration,
+            "fcp" if record["cod_or"] == "006" else "difal",
+            parent_record["uf"],
+        )
         return {
             "COD_OR": record["cod_or"],
             "VL_OR": float(record["amount"]),
-            # the revenue code and due date are the destination UF's (GNRE):
-            # configuration of the taxpayer, see cod_receita on the 0000
-            "DT_VCTO": False,
-            "COD_REC": "",
+            # the revenue code and due date are the UF's of the E300 (GNRE
+            # for another UF): configuration of the taxpayer
+            "DT_VCTO": due,
+            "COD_REC": code,
             "MES_REF": declaration.DT_INI.strftime("%m%Y"),
         }
 

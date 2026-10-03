@@ -5,7 +5,7 @@
     "name": "SPED - EFD ICMS IPI",
     "summary": """
         Arquivo EFD ICMS IPI do SPED / SPED Fiscal""",
-    "version": "18.0.1.5.1",
+    "version": "18.0.1.6.0",
     "license": "AGPL-3",
     "author": "Akretion, Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/l10n-brazil",
@@ -25,6 +25,7 @@
     "data": [
         "security/ir.model.access.csv",
         "views/sped_efd_icms_ipi.xml",
+        "views/obligation.xml",
     ],
     "demo": [],
     "application": True,
