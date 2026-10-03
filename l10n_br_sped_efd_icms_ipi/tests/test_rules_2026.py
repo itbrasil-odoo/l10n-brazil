@@ -606,3 +606,47 @@ class TestPvaRules(Rules2026Common):
         totals = icms_document_totals(self.env, self.declaration)
         self.assertAlmostEqual(totals["debit"], 18.0, places=2)
         self.assertAlmostEqual(totals["credit"], 10.0, places=2)
+
+    def test_entry_whose_bill_was_cancelled_is_not_bookkept(self):
+        """A loja cancela a fatura de entrada e relança a mesma NF-e.
+
+        O documento da fatura cancelada continua "autorizada" (é NF-e de
+        terceiro), às vezes sem número: não pode virar C100.
+        """
+        if "move_ids" not in self.env["l10n_br_fiscal.document"]._fields:
+            self.skipTest("l10n_br_account is not installed")
+        journal = self.env["account.journal"].search(
+            [("type", "=", "purchase"), ("company_id", "=", self.company.id)],
+            limit=1,
+        )
+        if not journal:
+            self.skipTest("no purchase journal in this database")
+        withdrawn = self._document(
+            80,
+            fiscal_operation_type="in",
+            issuer="partner",
+            document_number=False,
+            document_key=False,
+            lines=[self._icms_line()],
+        )
+        move = self.env["account.move"].create(
+            {
+                "move_type": "in_invoice",
+                "journal_id": journal.id,
+                "partner_id": self.partner.id,
+            }
+        )
+        move.fiscal_document_id = withdrawn
+        self.assertIn(move, withdrawn.move_ids)
+        move.button_cancel()
+        withdrawn.write({"state_edoc": "autorizada"})
+        relaunched = self._document(
+            81, fiscal_operation_type="in", issuer="partner", lines=[self._icms_line()]
+        )
+        self.declaration.invalidate_recordset()
+        domain = self.env["l10n_br_sped.efd_icms_ipi.c100"]._odoo_domain(
+            None, self.declaration
+        )
+        ids = self.env["l10n_br_fiscal.document"].search(domain).ids
+        self.assertNotIn(withdrawn.id, ids)
+        self.assertIn(relaunched.id, ids)
