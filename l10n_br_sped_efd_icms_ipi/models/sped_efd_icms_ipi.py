@@ -10,6 +10,7 @@ from datetime import datetime, time
 from erpbrasil.base import misc
 from erpbrasil.base.misc import punctuation_rm
 from lxml.builder import E
+from markupsafe import Markup
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -28,6 +29,9 @@ from odoo.addons.l10n_br_sped_base.models.sped_mixin import (
 # identification fields and no child register (Guia Prático, C100, Exceção 1).
 COD_SIT_WITHOUT_VALUES = ("02", "03", "04", "05")
 COD_SIT_VALID = ("00", "01", "02", "03", "04", "05", "06", "07", "08")
+# Guia Prático, E110 campos 02 e 03: extemporaneous documents (Tabela 4.1.2)
+# stay out of the debits and go to DEB_ESP.
+COD_SIT_EXTEMPORANEOUS = ("01", "07", "10")
 
 # state_edoc -> COD_SIT when the document has no state_fiscal of its own.
 COD_SIT_FROM_EDOC = {
@@ -190,6 +194,123 @@ def st_assessment(bucket):
         "VL_SLD_CRED_ST_TRANSPORTAR": max(-balance, 0.0),
         "DEB_ESP_ST": 0.0,
     }
+
+
+def icms_document_totals(env, declaration):
+    """ICMS debits, credits and extemporaneous amounts of the period.
+
+    Guia Prático 3.2.4, E110:
+    - campo 02 is the VL_ICMS of the C190 of the exit documents, without the
+      extemporaneous ones (COD_SIT 01, 07 and 10) and without CFOP 5605, and
+      with CFOP 1605 (debit balance received from another establishment);
+    - campo 06 is the VL_ICMS of the C190 of the entry documents, without
+      CFOP 1605 and with CFOP 5605;
+    - the extemporaneous documents go to campo 15 (DEB_ESP), "acompanhado
+      dos demais valores extra-apuração" (campo 03).
+    The PVA checks fields 02 and 06 against the C190, so they are read from
+    the same documents and lines, never from the accounting: an entry whose
+    ICMS went to cost, or an invoice whose tax line differs from its
+    document, would otherwise give a file the PVA refuses.
+    """
+    totals = {"debit": 0.0, "credit": 0.0, "extemporaneous": 0.0}
+    for document in valued_documents(env, declaration):
+        extemporaneous = cod_sit(document) in COD_SIT_EXTEMPORANEOUS
+        for line in document.fiscal_line_ids:
+            cfop = line.cfop_id.code or ""
+            exit_side = document.fiscal_operation_type != FISCAL_IN
+            if cfop == "5605":
+                exit_side = False
+            elif cfop == "1605":
+                exit_side = True
+            if exit_side and extemporaneous:
+                totals["extemporaneous"] += line.icms_value
+            elif exit_side:
+                totals["debit"] += line.icms_value
+            else:
+                totals["credit"] += line.icms_value
+    return totals
+
+
+def e110_values(env, declaration, assessment):
+    """The E110 fields: documents for 02/06, the assessment for the rest.
+
+    Debits and credits come from the documents (`icms_document_totals`). The
+    assessment contributes what only it knows: the manual adjustments with a
+    table 5.1.1 code (fields 04, 05, 08 and 09, also written as E111), the
+    credit balance carried from the previous period (10), the deductions (12)
+    and the special debits (14). Its own debit and credit lines, read from the
+    accounting, are deliberately left out: they describe the same operations
+    the documents do, and adding both would count them twice.
+    """
+    documents = icms_document_totals(env, declaration)
+    manual = dict.fromkeys(
+        ("adjustment_debit", "adjustment_credit", "credit_reversal", "debit_reversal"),
+        0.0,
+    )
+    for line in assessment.line_ids.filtered(lambda line: line.source == "manual"):
+        key = assessment._total_key_for_line(line)
+        if key in manual:
+            manual[key] += line.tax_amount
+    debit_side = (
+        documents["debit"] + manual["adjustment_debit"] + manual["credit_reversal"]
+    )
+    credit_side = (
+        documents["credit"]
+        + manual["adjustment_credit"]
+        + manual["debit_reversal"]
+        + assessment.previous_balance
+    )
+    # Guia Prático, E110 campos 11 a 14: the deductions are reported in full
+    # "ainda que no campo VL_SLD_APURADO tenha como resultado o valor zero";
+    # what they exceed of the balance due goes to the credit balance carried
+    # forward, which also takes the absolute value of a negative expression.
+    balance = debit_side - credit_side
+    assessed = max(balance, 0.0)
+    deductions = assessment.deduction_total
+    payable = assessed - deductions
+    if balance >= 0:
+        carried = max(-payable, 0.0)
+    else:
+        carried = -balance + deductions
+    return {
+        "VL_TOT_DEBITOS": documents["debit"],
+        # Debit adjustments coming from the fiscal document itself
+        # (C197/D197) are not written yet: once they are, they belong here
+        # rather than in field 04, which is the assessment adjustment.
+        "VL_AJ_DEBITOS": 0.0,
+        "VL_TOT_AJ_DEBITOS": manual["adjustment_debit"],
+        "VL_ESTORNOS_CRED": manual["credit_reversal"],
+        "VL_TOT_CREDITOS": documents["credit"],
+        "VL_AJ_CREDITOS": 0.0,
+        "VL_TOT_AJ_CREDITOS": manual["adjustment_credit"],
+        "VL_ESTORNOS_DEB": manual["debit_reversal"],
+        "VL_SLD_CREDOR_ANT": assessment.previous_balance,
+        "VL_SLD_APURADO": assessed,
+        "VL_TOT_DED": deductions,
+        "VL_ICMS_RECOLHER": max(payable, 0.0),
+        "VL_SLD_CREDOR_TRANSPORTAR": carried,
+        "DEB_ESP": assessment.special_debit_total + documents["extemporaneous"],
+    }
+
+
+def accounting_divergence(env, declaration, assessment):
+    """Debits and credits where the accounting disagrees with the documents.
+
+    The assessment reads the tax lines of the accounting; the file reads the
+    documents. When they differ (an entry whose ICMS went to cost, an invoice
+    whose tax line was edited), the file is still right, but the accounting
+    is not, and somebody has to fix it. Returns the differences, rounded.
+    """
+    documents = icms_document_totals(env, declaration)
+    differences = {}
+    for kind, booked in (
+        ("debit", assessment.debit_total),
+        ("credit", assessment.credit_total),
+    ):
+        difference = round(documents[kind] - booked, 2)
+        if difference:
+            differences[kind] = (round(documents[kind], 2), round(booked, 2))
+    return differences
 
 
 # CSOSN of a Simples Nacional supplier -> CST_ICMS on the declarant's side.
@@ -4384,11 +4505,12 @@ class RegistroE100(models.Model):
 class RegistroE110(models.Model):
     """ICMS assessment.
 
-    This record computes nothing: it SERIALIZES the period ICMS assessment
-    (`l10n_br_tax.assessment`), which already publishes the totals in the same
-    order as the E110 fields. Recomputing here would produce a file that
-    matches neither the accounting nor the payment slip, which is exactly the
-    defect the assessment layer exists to prevent.
+    Debits (02) and credits (06) are the C190 totals, as the Guia Prático
+    defines them and the PVA checks; everything else (adjustments, previous
+    balance, deductions, special debits) comes from the period ICMS
+    assessment (`l10n_br_tax.assessment`). See `e110_values`. When the
+    accounting the assessment reads disagrees with the documents, the
+    difference is posted on the declaration for someone to fix the books.
 
     Cardinality is 1:1 within E100: when there is no closed ICMS assessment for
     the period no record is generated and the structural validator reports the
@@ -4456,25 +4578,25 @@ class RegistroE110(models.Model):
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
-        return {
-            "VL_TOT_DEBITOS": record.debit_total,
-            # Debit adjustments coming from the fiscal document itself
-            # (C197/D197) are not written yet: once they are, they belong here
-            # rather than in field 04, which is the assessment adjustment.
-            "VL_AJ_DEBITOS": 0.0,
-            "VL_TOT_AJ_DEBITOS": record.adjustment_debit_total,
-            "VL_ESTORNOS_CRED": record.credit_reversal_total,
-            "VL_TOT_CREDITOS": record.credit_total,
-            "VL_AJ_CREDITOS": 0.0,
-            "VL_TOT_AJ_CREDITOS": record.adjustment_credit_total,
-            "VL_ESTORNOS_DEB": record.debit_reversal_total,
-            "VL_SLD_CREDOR_ANT": record.previous_balance,
-            "VL_SLD_APURADO": record.assessed_balance,
-            "VL_TOT_DED": record.deduction_total,
-            "VL_ICMS_RECOLHER": record.amount_payable,
-            "VL_SLD_CREDOR_TRANSPORTAR": record.amount_carried_forward,
-            "DEB_ESP": record.special_debit_total,
-        }
+        divergence = accounting_divergence(self.env, declaration, record)
+        if divergence:
+            labels = {"debit": _("débitos"), "credit": _("créditos")}
+            items = "".join(
+                f"<li>{labels[kind]}: documentos {docs:.2f}, contabilidade "
+                f"{booked:.2f}</li>"
+                for kind, (docs, booked) in divergence.items()
+            )
+            declaration.message_post(
+                body=Markup(
+                    _(
+                        "<p>E110 escriturado pelos documentos fiscais; a "
+                        "apuração %(name)s, lida da contabilidade, diverge:</p>"
+                        "<ul>%(items)s</ul>"
+                    )
+                )
+                % {"name": record.display_name, "items": Markup(items)}
+            )
+        return e110_values(self.env, declaration, record)
 
 
 class RegistroE111(models.Model):
@@ -4579,16 +4701,23 @@ class RegistroE116(models.Model):
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
-        # There is only an obligation to collect when the assessment closes
-        # with tax due; a period with a credit balance generates no E116, and
-        # E110 reports zero as well.
-        return [("id", "=", parent_record.id), ("amount_payable", ">", 0)]
+        # There is only an obligation to collect when the E110 closes with tax
+        # due; a period with a credit balance generates no E116. The amount is
+        # the E110 one (documents), not the assessment's own, so that the sum
+        # of the E116 matches E110 fields 13 + 15 as the PVA checks.
+        values = e110_values(self.env, declaration, parent_record)
+        if values["VL_ICMS_RECOLHER"] + values["DEB_ESP"] <= 0:
+            return [("id", "=", 0)]
+        return [("id", "=", parent_record.id)]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
         return {
             "COD_OR": declaration.cod_obrigacao,
-            "VL_OR": record.amount_payable,
+            "VL_OR": sum(
+                e110_values(self.env, declaration, record)[field]
+                for field in ("VL_ICMS_RECOLHER", "DEB_ESP")
+            ),
             "DT_VCTO": declaration.dt_vcto_obrigacao,
             "COD_REC": declaration.cod_receita,
             "MES_REF": record.date_from.strftime("%m%Y"),
