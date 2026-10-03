@@ -852,25 +852,17 @@ class Registro0220(models.Model):
 
     @api.model
     def _odoo_query(self, parent_record, declaration):
-        # We query the DB to find if this product was sold/bought in a UoM
-        # different from its Inventory UoM during the period.
-        query = """
-            SELECT DISTINCT uom.name AS unid_conv, uom.id as uom_id
-            FROM l10n_br_fiscal_document_line fdl
-            JOIN l10n_br_fiscal_document fd ON fd.id = fdl.document_id
-            JOIN uom_uom uom ON uom.id = fdl.uom_id
-            WHERE fdl.product_id = %s
-              AND fdl.uom_id != %s
-              AND fd.document_date >= %s
-              AND fd.document_date <= %s
-              AND fd.state_edoc IN ('autorizada', 'enviada')
-        """
-        return query, [
-            parent_record.id,
-            parent_record.uom_id.id,
-            declaration.DT_INI,
-            declaration.DT_FIN,
-        ]
+        # Guia Prático, 0220: one factor per unit a C170 uses for the item
+        # other than its inventory unit (0200.UNID_INV). Read from the very
+        # lines that become C170 (same period bounds and documents), not from
+        # a query of its own over a date range of its own.
+        lines = item_lines(self.env, declaration).filtered(
+            lambda line: line.product_id == parent_record
+            and line.uom_id
+            and line.uom_id.code != parent_record.uom_id.code
+        )
+        uoms = lines.mapped("uom_id")
+        return values_query([(uom.id,) for uom in uoms], ("uom_id",))
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -878,7 +870,10 @@ class Registro0220(models.Model):
         inventory_uom = parent_record.uom_id
 
         # Odoo's native UoM conversion ratio math
-        factor = commercial_uom._compute_quantity(1.0, inventory_uom)
+        # units of different categories have no factor (cadastro): kept at 1
+        factor = commercial_uom._compute_quantity(
+            1.0, inventory_uom, raise_if_failure=False
+        )
 
         return {
             "UNID_CONV": commercial_uom.code or "",
