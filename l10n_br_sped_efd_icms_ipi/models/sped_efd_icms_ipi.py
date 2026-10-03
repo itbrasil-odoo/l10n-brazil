@@ -662,12 +662,23 @@ class Registro0150(models.Model):
             ("active", "in", (True, False)),
             # only the participants a valued C100 points at: the PVA refuses
             # an unreferenced 0150 (e.g. the customer of a cancelled NF-e)
-            (
-                "id",
-                "in",
-                valued_documents(self.env, declaration).mapped("partner_id").ids,
-            ),
+            ("id", "in", self._participants(declaration).ids),
         ]
+
+    @api.model
+    def _participants(self, declaration):
+        """One partner per COD_PART.
+
+        Only the participants a valued C100 points at (the PVA refuses an
+        unreferenced 0150, e.g. the customer of a cancelled NF-e), and one
+        per code: two partner records with the same CNPJ are one participant
+        ("Duplicidade de ocorrência da chave COD_PART").
+        """
+        partners = valued_documents(self.env, declaration).mapped("partner_id")
+        by_code = {}
+        for partner in partners.sorted("id"):
+            by_code.setdefault(participant_code(partner), partner)
+        return self.env["res.partner"].browse([p.id for p in by_code.values()])
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
@@ -678,7 +689,8 @@ class Registro0150(models.Model):
             "IE": misc.punctuation_rm(record.l10n_br_ie_code or ""),
             "SUFRAMA": record.l10n_br_isuf_code or "",
             "END": record.street_name[:60] if record.street_name else "",
-            "NUM": misc.punctuation_rm(record.street_number),
+            # 10 positions (Guia Prático, 0150 campo 11)
+            "NUM": misc.punctuation_rm(record.street_number or "")[:10],
             "COMPL": record.street2,
             "BAIRRO": record.district,
         }
@@ -1313,8 +1325,13 @@ class RegistroC100(models.Model):
         )
         documents = (documents - entries_late) | entries_early
         # Guia Prático 3.2.4, C100: a document that carries only the new
-        # taxes of the reform (CBS/IBS/IS) and no ICMS nor IPI is not bookkept.
-        documents = documents.filtered(lambda doc: not has_only_reform_taxes(doc))
+        # taxes of the reform (CBS/IBS/IS) and no ICMS nor IPI is not bookkept;
+        # nor, since January 2023, a denied NF-e or a voided number (codes 04
+        # and 05 of Tabela 4.1.2 were discontinued; the PVA refuses them).
+        documents = documents.filtered(
+            lambda doc: not has_only_reform_taxes(doc)
+            and doc.state_edoc not in ("denegada", "inutilizada")
+        )
         return [("id", "in", documents.ids)]
 
     @api.model
