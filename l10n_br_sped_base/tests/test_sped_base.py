@@ -393,6 +393,35 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
             arch,
         )
 
+    def test_failed_pull_blocks_the_file(self):
+        """Register whose pull failed would vanish from a well-formed file."""
+        declaration = self.declaration
+        register = self.env["l10n_br_sped.fake.i010"]
+        with (
+            patch.object(
+                type(self.env["l10n_br_sped.mixin"]),
+                "_get_top_registers",
+                return_value=[register],
+            ),
+            patch.object(
+                type(register),
+                "_pull_records_from_odoo",
+                side_effect=ValueError("broken mapping"),
+            ),
+        ):
+            declaration.button_populate_sped_from_odoo()
+        self.assertIn("broken mapping", declaration.pull_error)
+        with self.assertRaises(UserError):
+            declaration.button_create_sped_files()
+        # a clean pull releases the generation again
+        with patch.object(
+            type(self.env["l10n_br_sped.mixin"]),
+            "_get_top_registers",
+            return_value=[],
+        ):
+            declaration.button_populate_sped_from_odoo()
+        self.assertFalse(declaration.pull_error)
+
     def test_populate_and_split_attachment_creation(self):
         declaration = self.declaration
         self.assertEqual(declaration.state, "draft")
