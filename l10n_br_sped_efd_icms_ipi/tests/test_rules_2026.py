@@ -519,3 +519,25 @@ class TestPvaRules(Rules2026Common):
         reg_0220 = reg_0200.reg_0220_ids
         self.assertEqual(reg_0220.UNID_CONV, dozen.code)
         self.assertAlmostEqual(reg_0220.FAT_CONV, 12.0, places=4)
+
+    def test_denied_and_voided_are_not_bookkept(self):
+        """Codes 04/05 of Tabela 4.1.2 were discontinued in January 2023."""
+        denied = self._document(72, state_edoc="denegada")
+        voided = self._document(73, state_edoc="inutilizada")
+        pulled = self._pull_c100().mapped("res_id")
+        self.assertNotIn(denied.id, pulled)
+        self.assertNotIn(voided.id, pulled)
+
+    def test_one_0150_per_participant_code(self):
+        twin = self.partner.copy({"name": "Mesmo CNPJ, outro cadastro"})
+        # the uniqueness check is newer than the data: real databases have
+        # such twins (archived or imported), so the test plants one in SQL
+        self.env.cr.execute(
+            "UPDATE res_partner SET vat = %s, cnpj_cpf_stripped = %s WHERE id = %s",
+            (self.partner.vat, self.partner.cnpj_cpf_stripped, twin.id),
+        )
+        twin.invalidate_recordset()
+        self._document(74, lines=[self._icms_line()])
+        self._document(75, lines=[self._icms_line()], partner_id=twin.id)
+        codes = self._pull("l10n_br_sped.efd_icms_ipi.0150").mapped("COD_PART")
+        self.assertEqual(len(codes), len(set(codes)))
