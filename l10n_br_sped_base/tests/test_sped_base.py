@@ -187,7 +187,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         # report "no movement" and the test would pass either way
         self.assertTrue(
             self.env["l10n_br_sped.fake.i010"].search_count([]),
-            "the fixture must have block I registers for this test to mean " "anything",
+            "the fixture must have block I registers for this test to mean anything",
         )
         sped = other._generate_sped_text()
 
@@ -322,11 +322,15 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
 
         self.assertEqual(
             mixin_instance._format_field_value(mock_monetary_field, 789.123),
-            "789.123",
+            "789,12",
         )
         self.assertEqual(
             mixin_instance._format_field_value(mock_monetary_field, 789.00),
             "789",
+        )
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_monetary_field, 10.5),
+            "10,50",
         )
         # Test zero monetary
         self.assertEqual(
