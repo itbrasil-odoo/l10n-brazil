@@ -187,7 +187,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         # report "no movement" and the test would pass either way
         self.assertTrue(
             self.env["l10n_br_sped.fake.i010"].search_count([]),
-            "the fixture must have block I registers for this test to mean " "anything",
+            "the fixture must have block I registers for this test to mean anything",
         )
         sped = other._generate_sped_text()
 
@@ -322,11 +322,15 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
 
         self.assertEqual(
             mixin_instance._format_field_value(mock_monetary_field, 789.123),
-            "789.123",
+            "789,12",
         )
         self.assertEqual(
             mixin_instance._format_field_value(mock_monetary_field, 789.00),
             "789",
+        )
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_monetary_field, 10.5),
+            "10,50",
         )
         # Test zero monetary
         self.assertEqual(
@@ -388,6 +392,41 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
             '<field name="IND_SIT_ESP"',
             arch,
         )
+
+    def test_attachment_lines_end_with_crlf(self):
+        """CR+LF after every register, the last one included."""
+        vals = self.declaration._create_sped_attachment("|0000|x|\n|9999|2|")
+        content = base64.b64decode(vals["datas"])
+        self.assertEqual(content, b"|0000|x|\r\n|9999|2|\r\n")
+
+    def test_failed_pull_blocks_the_file(self):
+        """Register whose pull failed would vanish from a well-formed file."""
+        declaration = self.declaration
+        register = self.env["l10n_br_sped.fake.i010"]
+        with (
+            patch.object(
+                type(self.env["l10n_br_sped.mixin"]),
+                "_get_top_registers",
+                return_value=[register],
+            ),
+            patch.object(
+                type(register),
+                "_pull_records_from_odoo",
+                side_effect=ValueError("broken mapping"),
+            ),
+        ):
+            declaration.button_populate_sped_from_odoo()
+        self.assertIn("broken mapping", declaration.pull_error)
+        with self.assertRaises(UserError):
+            declaration.button_create_sped_files()
+        # a clean pull releases the generation again
+        with patch.object(
+            type(self.env["l10n_br_sped.mixin"]),
+            "_get_top_registers",
+            return_value=[],
+        ):
+            declaration.button_populate_sped_from_odoo()
+        self.assertFalse(declaration.pull_error)
 
     def test_populate_and_split_attachment_creation(self):
         declaration = self.declaration
@@ -499,7 +538,6 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|I015|DATA_BLOCO_I_LINE_3|...|",
                 "|I990|CLOSE_BLOCO_I|...|",
             ]
-            # every line ends in CRLF (sped_file_text)
             self.assertEqual(content_i, "\r\n".join(expected_content_i_lines))
 
             # Check Bloco J
@@ -888,20 +926,21 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         mojibake: the ECF PVA shows "DISCRIMINA\u00c7\u00c3O" as
         "DISCRIMINA\u00c3\u0083O" and flags the whole line.
         """
-        text = "|P200|1|DISCRIMINA\u00c7\u00c3O DA RECEITA BRUTA||\r\n"
+        text = "|P200|1|DISCRIMINA\u00c7\u00c3O DA RECEITA BRUTA||\n"
         vals = self.declaration._create_sped_attachment(text)
         stored = base64.b64decode(vals["datas"])
-        self.assertEqual(stored, text.encode("iso-8859-1"))
+        # the file lines end with CR+LF
+        self.assertEqual(stored, text.replace("\n", "\r\n").encode("iso-8859-1"))
         # one byte per accented character, no utf-8 marker in the Latin range
-        self.assertEqual(len(stored), len(text))
+        self.assertEqual(len(stored), len(text) + 1)
         self.assertNotIn(b"\xc3\x87", stored)
 
     def test_character_outside_latin1_does_not_abort(self):
         """A symbol pasted in some label cannot block the whole file."""
-        text = "|I250|Taxa \u20ac de servico|\r\n"
+        text = "|I250|Taxa \u20ac de servico|\n"
         vals = self.declaration._create_sped_attachment(text)
         stored = base64.b64decode(vals["datas"])
-        self.assertEqual(len(stored), len(text))
+        self.assertEqual(len(stored), len(text) + 1)  # + CR
         self.assertIn(b"?", stored)
 
     def test_import_reads_latin1(self):
