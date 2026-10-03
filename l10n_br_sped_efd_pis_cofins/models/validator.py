@@ -2,18 +2,15 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/lgpl-3.0.en.html).
 """Validador estrutural do sped_base com as regras da EFD-Contribuições.
 
-O validador genérico do sped_base conhece a ordem dos blocos da ECF. A
-EFD-Contribuições tem outra ordem (Guia Prático 1.35, Seção 1: blocos 0, A,
-C, D, F, I, M, P, 1 e 9) e regras condicionais de obrigatoriedade que o spec
-não expressa sozinho.
+A ordem dos blocos vem do sped_base (tipo "efd_pis_cofins"). Aqui ficam as
+regras próprias desta escrituração: blocos obrigatórios, bloco P proibido e
+a obrigatoriedade condicional que o spec não expressa sozinho.
 """
 
 from odoo.addons.l10n_br_sped_base.models.validator import SpedValidator
 
-# Guia Prático 1.35, "Estrutura do arquivo": ordem dos blocos. Desde 2025 o
-# bloco P não pode mais ser escriturado (NT 09/2024); os demais são
-# obrigatórios, com ou sem dados.
-BLOCKS = ["0", "A", "C", "D", "F", "I", "M", "P", "1"]
+# Desde 2025 o bloco P não pode mais ser escriturado (NT 09/2024); os demais
+# são obrigatórios, com ou sem dados (Guia Prático 1.35, Seção 1).
 REQUIRED_BLOCKS = ["0", "A", "C", "D", "F", "I", "M", "1"]
 
 # Guia 1.35, Registro C100: no documento cancelado (02, 03), denegado (04) ou
@@ -32,33 +29,17 @@ C100_WITHOUT_DATA = ("02", "03", "04", "05")
 
 
 class EfdContribuicoesValidator(SpedValidator):
+    def __init__(self, text, registers=None, kind="efd_pis_cofins"):
+        super().__init__(text, registers, kind=kind)
+
     def _validate_blocks(self, structure):
-        """Cada bloco abre e fecha uma vez, na ordem do leiaute."""
-        seen = []
-        for number, code, _fields in structure:
-            if code == "0000":
-                continue
-            block = "0" if code.startswith("0") else code[0]
-            if block not in seen:
-                seen.append(block)
-            elif seen[-1] != block:
-                self._error(
-                    number,
-                    code,
-                    f"block {block} reappears after it was already closed",
-                )
-        expected = [block for block in BLOCKS + ["9"] if block in seen]
-        if seen != expected:
-            self._error(
-                0, "?", f"blocks are out of the official order: {' '.join(seen)}"
-            )
+        super()._validate_blocks(structure)
         codes = {code for _number, code, _fields in structure}
         if "P001" in codes:
             self._error(0, "P001", "block P is forbidden since 2025 (NT 09/2024)")
         for block in REQUIRED_BLOCKS:
             opening = "0001" if block == "0" else f"{block}001"
             closing = "0990" if block == "0" else f"{block}990"
-            # na EFD-Contribuições todo bloco é obrigatório, com ou sem dados
             if opening not in codes:
                 self._error(0, opening, f"the opening of block {block} is missing")
             if closing not in codes:

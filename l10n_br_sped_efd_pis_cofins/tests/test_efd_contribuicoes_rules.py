@@ -82,7 +82,15 @@ class TestEfdContribuicoesRules(TransactionCase):
         cls.cst_cofins_04 = ref("l10n_br_fiscal.cst_cofins_04")
         cls.number = 100
 
-    def _document(self, company=None, lines=None, state="autorizada", day=10):
+    def _document(
+        self,
+        company=None,
+        lines=None,
+        state="autorizada",
+        day=10,
+        operation=None,
+        issuer="company",
+    ):
         """Documento de venda autorizado, com tributos já calculados.
 
         `imported_document` preserva os valores informados nas linhas, como
@@ -101,7 +109,7 @@ class TestEfdContribuicoesRules(TransactionCase):
                 "fiscal_price": 100.0,
                 "fiscal_quantity": 1.0,
                 "cfop_id": self.cfop_venda.id,
-                "fiscal_operation_id": self.fo_venda.id,
+                "fiscal_operation_id": (operation or self.fo_venda).id,
                 "pis_cst_id": self.cst_pis_01.id,
                 "pis_base": 100.0,
                 "pis_percent": 1.65,
@@ -118,8 +126,8 @@ class TestEfdContribuicoesRules(TransactionCase):
                 "company_id": (company or self.matriz).id,
                 "partner_id": self.customer.id,
                 "document_type_id": self.doc_55.id,
-                "fiscal_operation_id": self.fo_venda.id,
-                "issuer": "company",
+                "fiscal_operation_id": (operation or self.fo_venda).id,
+                "issuer": issuer,
                 "imported_document": True,
                 "document_number": str(self.number),
                 "document_serie": "1",
@@ -250,6 +258,14 @@ class TestEfdContribuicoesRules(TransactionCase):
         doc_filial = self._document(company=self.filial)
         declaration = self._declaration()
         self.assertEqual(declaration.establishment_ids, self.matriz | self.filial)
+        # UNID é o código da unidade e o NCM vai só com dígitos
+        self.assertEqual(
+            set(self._registers(declaration, "0190").mapped("UNID")),
+            {self.product.uom_id.code[:6]},
+        )
+        self.assertEqual(
+            set(self._registers(declaration, "0200").mapped("COD_NCM")), {"94033000"}
+        )
         reg_0140 = self._registers(declaration, "0140")
         self.assertEqual(
             sorted(reg_0140.mapped("CNPJ")),
@@ -499,3 +515,121 @@ class TestEfdContribuicoesRules(TransactionCase):
         self.assertEqual(
             (fields[25], fields[26], fields[27], fields[30]), ("01", "0", "0", "0")
         )
+
+    # ------------------------------------------------------------------
+    # Regime cumulativo (Lucro Presumido)
+    # ------------------------------------------------------------------
+
+    def _cumulative_lines(self, **extra):
+        vals = {
+            "pis_base": 100.0,
+            "pis_percent": 0.65,
+            "pis_value": 0.65,
+            "cofins_base": 100.0,
+            "cofins_percent": 3.0,
+            "cofins_value": 3.0,
+        }
+        vals.update(extra)
+        return [vals]
+
+    def test_cumulative_regime_from_profit_calculation(self):
+        """Lucro Presumido: 0110 = 2, M210 51 e DARF do cumulativo."""
+        self.matriz.profit_calculation = "presumed"
+        self._document(lines=self._cumulative_lines())
+        declaration = self._declaration()
+        self.assertEqual(declaration.cod_inc_trib, "2")
+        reg_0110 = self._registers(declaration, "0110")
+        self.assertEqual(
+            (reg_0110.COD_INC_TRIB, reg_0110.IND_APRO_CRED, reg_0110.IND_REG_CUM),
+            ("2", False, "9"),
+        )
+        m210 = self._registers(declaration, "m210")
+        self.assertEqual((m210.COD_CONT, m210.ALIQ_PIS), ("51", 0.65))
+        m200 = self._registers(declaration, "m200")
+        self.assertAlmostEqual(m200.VL_TOT_CONT_CUM_PER, 0.65)
+        self.assertAlmostEqual(m200.VL_CONT_CUM_REC, 0.65)
+        self.assertAlmostEqual(m200.VL_TOT_CONT_NC_PER, 0.0)
+        m205 = self._registers(declaration, "m205")
+        self.assertEqual((m205.NUM_CAMPO, m205.COD_REC), ("12", "810902"))
+        self.assertEqual(self._registers(declaration, "m605").COD_REC, "217201")
+        text = declaration._generate_sped_text()
+        self.assertEqual(declaration.validate_sped_text(text), [])
+
+    def test_cumulative_regime_skips_purchases(self):
+        """Guia 1.35, Seção 4: entrada sem crédito não precisa ser informada."""
+        self.matriz.profit_calculation = "presumed"
+        self._document(lines=self._cumulative_lines())
+        self._document(
+            operation=self.env.ref("l10n_br_fiscal.fo_compras"),
+            issuer="partner",
+            lines=[{"cfop_id": self.env.ref("l10n_br_fiscal.cfop_1102").id}],
+        )
+        declaration = self._declaration()
+        self.assertEqual(self._registers(declaration, "c100").mapped("IND_OPER"), ["1"])
+        # no não cumulativo a mesma entrada é escriturada
+        self.matriz.profit_calculation = "real"
+        declaration = self._declaration()
+        self.assertEqual(
+            sorted(self._registers(declaration, "c100").mapped("IND_OPER")),
+            ["0", "1"],
+        )
+
+    def test_nat_rec_rule_for_legal_framework(self):
+        """CST 08: a natureza (tabela 4.3.15) vem da regra do contador."""
+        Rule = self.env["l10n_br_sped_efd_pis_cofins.nat_rec.rule"]
+        Rule.create({"cst": "08", "nat_rec": "999", "note": "geral"})
+        Rule.create(
+            {
+                "cst": "08",
+                "ncm_prefix": "9403",
+                "nat_rec": "401",
+                "company_id": self.matriz.id,
+            }
+        )
+        cst_08 = {
+            "pis_cst_id": self.env.ref("l10n_br_fiscal.cst_pis_08").id,
+            "pis_base": 0.0,
+            "pis_percent": 0.0,
+            "pis_value": 0.0,
+            "cofins_cst_id": self.env.ref("l10n_br_fiscal.cst_cofins_08").id,
+            "cofins_base": 0.0,
+            "cofins_percent": 0.0,
+            "cofins_value": 0.0,
+        }
+        self._document(lines=[cst_08])
+        declaration = self._declaration()
+        m400 = self._registers(declaration, "m400")
+        self.assertEqual(m400.CST_PIS, "08")
+        # o prefixo de NCM mais longo, da empresa, vence a regra geral
+        self.assertEqual(m400.reg_M410_ids.NAT_REC, "401")
+        self.assertEqual(
+            self._registers(declaration, "m800").reg_M810_ids.NAT_REC, "401"
+        )
+        self.assertEqual(Rule._find(self.matriz, "08", "84212300"), "999")
+        self.assertEqual(Rule._find(self.matriz, "07", "84212300"), "")
+
+    def test_c120_from_import_declaration(self):
+        """NF-e de importação: C120 por DI/DUIMP, sem repetir o número."""
+        if "nfe.40.di" not in self.env:
+            self.skipTest("l10n_br_nfe não instalado: sem o grupo DI da NF-e")
+        document = self._document(
+            operation=self.env.ref("l10n_br_fiscal.fo_compras"),
+            lines=[
+                {"cfop_id": self.env.ref("l10n_br_fiscal.cfop_3102").id},
+                {"cfop_id": self.env.ref("l10n_br_fiscal.cfop_3102").id},
+            ],
+        )
+        for line in document.fiscal_line_ids:
+            self.env["nfe.40.di"].create(
+                {
+                    "nfe40_nDI": "26BR00000000001",
+                    "nfe40_dDI": date(2026, 9, 1),
+                    "nfe40_DI_prod_id": line.id,
+                }
+            )
+        declaration = self._declaration()
+        c120 = self._registers(declaration, "c120")
+        self.assertEqual(len(c120), 1)
+        self.assertEqual((c120.COD_DOC_IMP, c120.NUM_DOC_IMP), ("2", "26BR00000000001"))
+        self.assertAlmostEqual(c120.VL_PIS_IMP, 3.3)
+        self.assertAlmostEqual(c120.VL_COFINS_IMP, 15.2)
