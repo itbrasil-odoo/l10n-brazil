@@ -10,6 +10,7 @@ from odoo.tests import common, tagged
 
 from odoo.addons.l10n_br_sped_efd_icms_ipi.models.sped_efd_icms_ipi import (
     cod_sit,
+    icms_document_totals,
     import_document_code,
 )
 
@@ -35,6 +36,10 @@ class Rules2026Common(common.TransactionCase):
         cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
         cls.env.user.tz = "America/Sao_Paulo"
         cls.company = cls.env.company
+        # the ST and DIFAL registers are keyed by the UF of the company: a
+        # database without demo data has none, so the tests set it
+        if not cls.company.state_id:
+            cls.company.state_id = cls.env.ref("base.state_br_mg")
         cls.partner = cls.env["res.partner"].create(
             {
                 "name": "Cliente Ficticio Alfanumerico",
@@ -551,3 +556,53 @@ class TestPvaRules(Rules2026Common):
         c190 = self._c100_of(document).reg_C190_ids
         self.assertAlmostEqual(c190.VL_RED_BC, c190.VL_OPR - 60.0, places=2)
         self.assertGreater(c190.VL_RED_BC, 0)
+
+    def test_icms_document_totals_follow_the_c190(self):
+        """E110 campos 02 e 06: ICMS das saídas e das entradas pelo CFOP.
+
+        Nota cancelada não soma, porque também não tem C190.
+        """
+        self.partner.state_id = self.company.state_id
+        self._document(
+            70,
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_5102").id,
+                    icms_value=18.0,
+                )
+            ],
+        )
+        self._document(
+            71,
+            fiscal_operation_type="in",
+            issuer="partner",
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_1102").id,
+                    icms_value=7.0,
+                )
+            ],
+        )
+        self._document(
+            72,
+            state_edoc="cancelada",
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_5102").id,
+                    icms_value=99.0,
+                )
+            ],
+        )
+        # 5605 (transferência de saldo devedor) conta como crédito
+        self._document(
+            73,
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_5605").id,
+                    icms_value=3.0,
+                )
+            ],
+        )
+        totals = icms_document_totals(self.env, self.declaration)
+        self.assertAlmostEqual(totals["debit"], 18.0, places=2)
+        self.assertAlmostEqual(totals["credit"], 10.0, places=2)

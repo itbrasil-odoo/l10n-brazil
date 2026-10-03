@@ -2,17 +2,26 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
 from io import StringIO
+from unittest.mock import patch
 
 from odoo.tests import common, tagged
+
+DOCUMENTS = (
+    "odoo.addons.l10n_br_sped_efd_icms_ipi.models.sped_efd_icms_ipi"
+    ".icms_document_totals"
+)
 
 
 @tagged("post_install", "-at_install")
 class TestBlocoE(common.TransactionCase):
-    """O bloco E serializa a apuração, não recalcula.
+    """O E110 soma os documentos (campos 02 e 06) e a apuração (o resto).
 
-    É o contrato que faz a escrituração, a contabilidade e a guia falarem o
-    mesmo número. Estes testes conferem valor, não presença: um E110 gerado
-    com zeros passaria num teste de presença e reprovaria no PVA.
+    Débitos e créditos vêm do C190, como o Guia define e o PVA confere; os
+    ajustes manuais, o saldo anterior e as deduções vêm da apuração. Os
+    totais dos documentos são simulados aqui (1000 de débito, 400 de
+    crédito); a soma real está coberta em test_rules_2026. Estes testes
+    conferem valor, não presença: um E110 gerado com zeros passaria num teste
+    de presença e reprovaria no PVA.
     """
 
     @classmethod
@@ -92,7 +101,7 @@ class TestBlocoE(common.TransactionCase):
             }
         )
 
-    def _pull_bloco_e(self):
+    def _pull_bloco_e(self, documents=None):
         # mesmo contexto que `button_populate_sped_from_odoo` monta: o
         # `default_declaration_id` e quem amarra cada registro criado a
         # declaracao, e sem ele o create esbarra no not-null.
@@ -101,7 +110,9 @@ class TestBlocoE(common.TransactionCase):
             declaration=self.declaration,
             default_declaration_id=self.declaration.id,
         )
-        model._pull_records_from_odoo("efd_icms_ipi", 2, log_msg=StringIO())
+        documents = documents or {"debit": 1000.0, "credit": 400.0, "extemporaneous": 0.0}
+        with patch(DOCUMENTS, return_value=documents):
+            model._pull_records_from_odoo("efd_icms_ipi", 2, log_msg=StringIO())
         return self.env["l10n_br_sped.efd_icms_ipi.e100"].search(
             [("declaration_id", "=", self.declaration.id)]
         )
@@ -123,8 +134,8 @@ class TestBlocoE(common.TransactionCase):
         self.assertAlmostEqual(e110.VL_ICMS_RECOLHER, 600.0, places=2)
         self.assertAlmostEqual(e110.VL_SLD_CREDOR_TRANSPORTAR, 0.0, places=2)
 
-    def test_e110_matches_the_assessment_totals(self):
-        """O E110 não pode divergir da apuração: ele é uma projeção dela."""
+    def test_e110_matches_the_assessment_when_books_agree(self):
+        """Contabilidade igual aos documentos: E110 igual à apuração."""
         e110 = self._pull_bloco_e().reg_E110_ids
         self.assertAlmostEqual(
             e110.VL_ICMS_RECOLHER, self.assessment.amount_payable, places=2
@@ -132,6 +143,64 @@ class TestBlocoE(common.TransactionCase):
         self.assertAlmostEqual(
             e110.VL_SLD_APURADO, self.assessment.assessed_balance, places=2
         )
+
+    def test_e110_follows_the_documents_when_books_disagree(self):
+        """Crédito que a contabilidade jogou no custo ainda entra no E110.
+
+        A compra com crédito de 300 de ICMS sem linha a recuperar: a apuração
+        (contabilidade) não vê o crédito, o C190 vê. O PVA confere o E110
+        contra o C190, então o arquivo segue os documentos, e a divergência
+        fica registrada na declaração para alguém corrigir a contabilidade.
+        """
+        e110 = self._pull_bloco_e(
+            {"debit": 1000.0, "credit": 700.0, "extemporaneous": 0.0}
+        ).reg_E110_ids
+        self.assertAlmostEqual(e110.VL_TOT_CREDITOS, 700.0, places=2)
+        # 1000 + 50 + 20 - 700 = 370; menos 70 de dedução
+        self.assertAlmostEqual(e110.VL_SLD_APURADO, 370.0, places=2)
+        self.assertAlmostEqual(e110.VL_ICMS_RECOLHER, 300.0, places=2)
+        self.assertAlmostEqual(e110.reg_E116_ids.VL_OR, 300.0, places=2)
+        message = self.declaration.message_ids[:1]
+        self.assertIn("700.00", message.body)
+        self.assertIn("400.00", message.body)
+
+    def test_credit_balance_has_no_obligation(self):
+        """Saldo credor: E110 transporta o crédito e não há E116.
+
+        Guia Prático 3.2.4, E110 campos 11 e 12: a dedução é informada
+        inteira mesmo com saldo apurado zero, e o valor absoluto da expressão
+        vai para o saldo credor a transportar "adicionado ao valor total das
+        deduções".
+        """
+        e110 = self._pull_bloco_e(
+            {"debit": 100.0, "credit": 900.0, "extemporaneous": 0.0}
+        ).reg_E110_ids
+        self.assertAlmostEqual(e110.VL_SLD_APURADO, 0.0, places=2)
+        self.assertAlmostEqual(e110.VL_ICMS_RECOLHER, 0.0, places=2)
+        self.assertAlmostEqual(e110.VL_TOT_DED, 70.0, places=2)
+        # |100 + 50 + 20 - 900| = 730, mais 70 de dedução
+        self.assertAlmostEqual(e110.VL_SLD_CREDOR_TRANSPORTAR, 800.0, places=2)
+        self.assertFalse(e110.reg_E116_ids)
+
+    def test_deduction_above_the_balance_is_carried(self):
+        """Campo 13: dedução maior que o saldo devedor vira saldo credor."""
+        e110 = self._pull_bloco_e(
+            {"debit": 400.0, "credit": 400.0, "extemporaneous": 0.0}
+        ).reg_E110_ids
+        # 400 + 50 + 20 - 400 = 70 apurado; 70 - 70 de dedução = 0
+        self.assertAlmostEqual(e110.VL_SLD_APURADO, 70.0, places=2)
+        self.assertAlmostEqual(e110.VL_ICMS_RECOLHER, 0.0, places=2)
+        self.assertAlmostEqual(e110.VL_SLD_CREDOR_TRANSPORTAR, 0.0, places=2)
+
+    def test_extemporaneous_documents_go_to_deb_esp(self):
+        """Campo 03/15: documento extemporâneo sai do débito e vai ao DEB_ESP."""
+        e110 = self._pull_bloco_e(
+            {"debit": 1000.0, "credit": 400.0, "extemporaneous": 25.0}
+        ).reg_E110_ids
+        self.assertAlmostEqual(e110.VL_TOT_DEBITOS, 1000.0, places=2)
+        self.assertAlmostEqual(e110.DEB_ESP, 25.0, places=2)
+        # E116: VL_OR = ICMS a recolher + DEB_ESP
+        self.assertAlmostEqual(e110.reg_E116_ids.VL_OR, 625.0, places=2)
 
     def test_e111_only_carries_manual_adjustments(self):
         """Linha apurada não vira E111: já está somada no campo 02 do E110."""
