@@ -12,6 +12,7 @@ from odoo.addons.l10n_br_sped_efd_icms_ipi.models.sped_efd_icms_ipi import (
     cod_sit,
     icms_document_totals,
     import_document_code,
+    nfe_di_available,
     obligation_code_and_due,
 )
 
@@ -264,7 +265,7 @@ class TestRules2026(Rules2026Common):
         self.assertEqual(import_document_code(""), "0")
 
     def test_c120_from_the_nfe_import_declaration(self):
-        if "nfe.40.di" not in self.env:
+        if not nfe_di_available(self.env):
             self.skipTest("l10n_br_nfe is not installed: no <DI> to read")
         document = self._document(
             50, lines=[self._icms_line()], fiscal_operation_type="in"

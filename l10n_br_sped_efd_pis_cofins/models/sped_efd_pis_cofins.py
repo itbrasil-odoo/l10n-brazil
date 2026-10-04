@@ -13,6 +13,7 @@ from erpbrasil.base import misc
 from lxml.builder import E
 
 from odoo import api, fields, models
+from odoo.tools.sql import table_exists
 
 from odoo.addons.l10n_br_fiscal.constants.fiscal import (
     DOCUMENT_ISSUER_COMPANY,
@@ -397,6 +398,18 @@ def _assessment_adjustments(env, declaration, tax):
             )
         result[regime] = adjustments
     return result
+
+
+def nfe_di_available(env):
+    """Whether the ``<DI>`` group of the NF-e items can be read.
+
+    ``nfe.40.di`` is a spec model of l10n_br_nfe: it only gets a table once
+    spec_driven_model makes it concrete, so a database with l10n_br_nfe
+    installed may still have no ``nfe_40_di`` (no NF-e with a ``<DI>`` stored
+    yet). Checking only that the model is registered then fails the whole
+    pull with "relation nfe_40_di does not exist".
+    """
+    return "nfe.40.di" in env and table_exists(env.cr, "nfe_40_di")
 
 
 class Registro0000(models.Model):
@@ -1404,7 +1417,7 @@ class RegistroC120(models.Model):
     @api.model
     def _odoo_domain(self, parent_record, declaration):
         if (
-            "nfe.40.di" not in self.env
+            not nfe_di_available(self.env)
             or parent_record.state_edoc != "autorizada"
             or parent_record.fiscal_operation_type != FISCAL_IN
             or not any(

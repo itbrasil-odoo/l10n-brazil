@@ -11,6 +11,7 @@ from lxml.builder import E
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from odoo.tools import float_is_zero
+from odoo.tools.sql import table_exists
 
 _logger = logging.getLogger(__name__)
 
@@ -672,11 +673,16 @@ class SpedMixin(models.AbstractModel):
             )
 
         if self._odoo_model and hasattr(self, "_odoo_domain"):
-            if self._odoo_model in self.env:
+            # The mapping may come from a module that is not installed, or
+            # point to a spec model that has no table yet (spec_driven_model
+            # only creates it once the model becomes concrete).
+            if self._odoo_model in self.env and table_exists(
+                self._cr, self.env[self._odoo_model]._table
+            ):
                 records = self.env[self._odoo_model].search(
                     self._odoo_domain(parent_record, declaration)
                 )
-            else:  # o mapeamento pode ser de um módulo que não está instalado
+            else:
                 records = []
 
         elif hasattr(self, "_odoo_query"):

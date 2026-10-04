@@ -7,7 +7,7 @@ from datetime import date, datetime
 from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
-from ..models.sped_efd_pis_cofins import _cod_mod
+from ..models.sped_efd_pis_cofins import _cod_mod, nfe_di_available
 
 
 def _cnpj(root, branch):
@@ -611,7 +611,7 @@ class TestEfdContribuicoesRules(TransactionCase):
 
     def test_c120_from_import_declaration(self):
         """NF-e de importação: C120 por DI/DUIMP, sem repetir o número."""
-        if "nfe.40.di" not in self.env:
+        if not nfe_di_available(self.env):
             self.skipTest("l10n_br_nfe não instalado: sem o grupo DI da NF-e")
         document = self._document(
             operation=self.env.ref("l10n_br_fiscal.fo_compras"),

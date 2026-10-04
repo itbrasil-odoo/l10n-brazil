@@ -14,6 +14,7 @@ from markupsafe import Markup
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.sql import table_exists
 
 from odoo.addons.l10n_br_fiscal.constants.fiscal import (
     DOCUMENT_ISSUER_COMPANY,
@@ -585,6 +586,18 @@ def has_only_reform_taxes(document):
         for line in lines
     )
     return has_new and not has_old
+
+
+def nfe_di_available(env):
+    """Whether the ``<DI>`` group of the NF-e items can be read.
+
+    ``nfe.40.di`` is a spec model of l10n_br_nfe: it only gets a table once
+    spec_driven_model makes it concrete, so a database with l10n_br_nfe
+    installed may still have no ``nfe_40_di`` (no NF-e with a ``<DI>`` stored
+    yet). Checking only that the model is registered then fails the whole
+    pull with "relation nfe_40_di does not exist".
+    """
+    return "nfe.40.di" in env and table_exists(env.cr, "nfe_40_di")
 
 
 class Registro0000(models.Model):
@@ -1902,7 +1915,7 @@ class RegistroC120(models.Model):
         to report and the query returns no row.
         """
         if (
-            "nfe.40.di" not in self.env
+            not nfe_di_available(self.env)
             or parent_record.fiscal_operation_type != FISCAL_IN
         ):
             return "SELECT 1 WHERE FALSE", []
