@@ -25,3 +25,13 @@ class SpedTest(common.TransactionCase):
             target_content = f.read()
             # print(sped)
             self.assertEqual(sped.strip(), target_content.strip())
+
+    def test_demo_passes_the_structural_validator(self):
+        from odoo.addons.l10n_br_sped_efd_icms_ipi.models.validator_efd_icms_ipi import (  # noqa: E501
+            validate_efd_icms_ipi,
+        )
+
+        file_path = path.join(self.demo_path, "demo_efd_icms_ipi.txt")
+        with open(file_path, encoding=SPED_ENCODING) as f:
+            issues = validate_efd_icms_ipi(self.env, f.read())
+        self.assertFalse(issues, [str(issue) for issue in issues])

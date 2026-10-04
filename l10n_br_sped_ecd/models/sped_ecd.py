@@ -76,7 +76,7 @@ class Registro0000(models.Model):
     @api.model
     def _append_top_view_elements(self, group, inline=False):
         res = super()._append_top_view_elements(group)
-        group.append(E.field(name="ind_esc", required="1", readonly=EDITABLE_ON_DRAFT))
+        group.append(E.field(name="ind_esc", required="1", attrs=EDITABLE_ON_DRAFT))
         return res
 
     @api.model
@@ -90,7 +90,7 @@ class Registro0000(models.Model):
             # "DT_INI": (will use the declaration field directly),
             # "DT_FIN": (will use the declaration field directly),
             "NOME": record.legal_name,
-            "CNPJ": record.cnpj_cpf_stripped,
+            "CNPJ": misc.punctuation_rm(record.vat),
             "UF": record.state_id.code,
             "IE": misc.punctuation_rm(record.l10n_br_ie_code),
             "COD_MUN": record.city_id.ibge_code,
@@ -196,21 +196,18 @@ class Registro0150(models.Model):
         return {
             "res_model": "res.partner",
             "res_id": record.id,
-            # O COD_PART tem de ser a mesma chave do resto do arquivo — o CNPJ/CPF,
-            # não o id do Odoo, que não existe fora deste banco.
-            "COD_PART": record.cnpj_cpf_stripped,
+            "COD_PART": record.id,
             "NOME": record.name,  # Nome pessoal ou empresarial do participante.
             "COD_PAIS": record.country_id.ibge_code or "BR",
-            "CNPJ": record.is_company and record.cnpj_cpf_stripped or "",
-            "CPF": not record.is_company and record.cnpj_cpf_stripped or "",
+            "CNPJ": record.is_company and misc.punctuation_rm(record.vat) or "",
+            "CPF": not record.is_company and misc.punctuation_rm(record.vat) or "",
             "NIT": 0,  # Número de Identificação do Trabalhador, Pis, Pasep, SUS.
             "UF": record.state_id.code,
             "IE": misc.punctuation_rm(record.l10n_br_ie_code),
             "IE_ST": 0,  # Inscrição Estadual do participante na unidade da feder...
             "COD_MUN": misc.punctuation_rm(record.city_id.ibge_code),
             "IM": misc.punctuation_rm(record.l10n_br_im_code or ""),
-            "SUFRAMA": record.l10n_br_isuf_code
-            or "",  # Inscrição da entidade na SUFRAMA
+            "SUFRAMA": "",  # suframa removed from res.partner in 18.0
         }
 
 
@@ -328,89 +325,85 @@ class RegistroI050(models.Model):
     _name = "l10n_br_sped.ecd.i050"
     _inherit = "l10n_br_sped.ecd.9.i050"
 
-    # A natureza da conta é a tabela 4.3.4 do leiaute da ECD, e o que o Odoo
-    # tem para deduzi-la é o `account_type`.
-    _NATUREZA_POR_TIPO = {
-        "asset": "01",  # contas de ativo
-        "liability": "02",  # contas de passivo
-        "equity": "03",  # patrimônio líquido
-        "income": "04",  # contas de resultado
+    _COD_NAT = {
+        "asset": "01",
+        "liability": "02",
+        "equity": "03",
+        "income": "04",
         "expense": "04",
-        "off": "05",  # contas de compensação
-    }
-
-    # O grupo não tem `account_type`; o que ele tem é o prefixo do código, e no
-    # plano brasileiro o primeiro dígito já diz a natureza: 1 ativo, 2 passivo,
-    # 3 custos, 4 produção, 5 despesas, 6 receitas, 7 apuração.
-    _NATUREZA_POR_DIGITO = {
-        "1": "01",
-        "2": "02",
-        "3": "04",
-        "4": "04",
-        "5": "04",
-        "6": "04",
-        "7": "04",
+        "off_balance": "05",
     }
 
     @api.model
-    def _odoo_query(self, parent_record, declaration):
-        """Grupos e contas na mesma consulta, ordenados pelo código.
+    def _pull_records_from_odoo(
+        self, kind, level, parent_register=None, parent_record=None, log_msg=None
+    ):
+        declaration = self._context["declaration"]
+        company = declaration.company_id
+        parent_field = "reg_I050_ids_RegistroI010_id"
 
-        A ECD quer o plano inteiro: os grupos como contas SINTÉTICAS e as contas
-        do razão como ANALÍTICAS, e cada uma apontando para a sua superior. O
-        Odoo guarda as duas coisas em tabelas diferentes (`account_group` e
-        `account_account`), e na 18 o código da conta virou `code_store`, um
-        jsonb por empresa — por isso a consulta é escrita à mão em vez de um
-        `search`. A ordenação por código garante que a superior venha antes da
-        subordinada, que é o que o PVA exige.
-        """
-        company_id = declaration.company_id.id
-        return (
-            """
-            SELECT 'group' AS origem, id, code_prefix_start AS codigo
-              FROM account_group
-             WHERE company_id = %(company)s
-               AND code_prefix_start IS NOT NULL
-            UNION ALL
-            SELECT 'account' AS origem, id, code_store->>%(company_txt)s AS codigo
-              FROM account_account
-             WHERE code_store ? %(company_txt)s
-               AND NOT deprecated
-             ORDER BY codigo
-            """,
-            {"company": company_id, "company_txt": str(company_id)},
+        groups = (
+            self.env["account.group"]
+            .with_company(company)
+            .search([("company_id", "=", company.id)])
         )
+        accounts = self.env["account.account"].with_company(company).search([])
 
-    @api.model
-    def _map_from_odoo(self, record, parent_record, declaration, index=0):
-        codigo = (record["codigo"] or "").strip()
-        sintetica = record["origem"] == "group"
-        if sintetica:
-            grupo = self.env["account.group"].browse(record["id"])
-            nome = grupo.name
-            natureza = self._NATUREZA_POR_DIGITO.get(codigo[:1], "09")
-            superior = grupo.parent_id.code_prefix_start or ""
-            res_model = "account.group"
-        else:
-            conta = self.env["account.account"].browse(record["id"])
-            nome = conta.name
-            natureza = self._NATUREZA_POR_TIPO.get(
-                (conta.account_type or "").split("_")[0], "09"
+        # COD_NAT per group inferred from the accounts it contains
+        group_nat = {}
+        for account in accounts:
+            grp = account.group_id
+            nat = self._COD_NAT.get(account.internal_group, "09")
+            while grp:
+                group_nat.setdefault(grp.id, nat)
+                grp = grp.parent_id
+
+        def group_level(grp):
+            depth, parent = 1, grp.parent_id
+            while parent:
+                depth, parent = depth + 1, parent.parent_id
+            return depth
+
+        items = [(g.code_prefix_start, "S", g) for g in groups if g.code_prefix_start]
+        items += [(a.code, "A", a) for a in accounts if a.code]
+        items.sort(key=lambda item: item[0])
+
+        for _code, ind, record in items:
+            if ind == "S":
+                vals = {
+                    "COD_NAT": group_nat.get(record.id, "09"),
+                    "IND_CTA": "S",
+                    "NIVEL": group_level(record),
+                    "COD_CTA": record.code_prefix_start,
+                    "COD_CTA_SUP": record.parent_id.code_prefix_start or "",
+                    "CTA": record.name,
+                    "res_model": "account.group",
+                    "res_id": record.id,
+                }
+            else:
+                grp = record.group_id
+                vals = {
+                    "COD_NAT": self._COD_NAT.get(record.internal_group, "09"),
+                    "IND_CTA": "A",
+                    "NIVEL": (group_level(grp) + 1) if grp else 1,
+                    "COD_CTA": record.code,
+                    "COD_CTA_SUP": grp.code_prefix_start if grp else "",
+                    "CTA": record.name,
+                    "res_model": "account.account",
+                    "res_id": record.id,
+                }
+            vals["DT_ALT"] = declaration.DT_INI
+            vals["declaration_id"] = declaration.id
+            if parent_register:
+                vals[parent_field] = parent_register.id
+            self.create(vals)
+
+        if log_msg is not None:
+            self._log_chatter_sped_item(
+                log_msg,
+                level,
+                self.search([("declaration_id", "=", declaration.id)]),
             )
-            superior = conta.group_id.code_prefix_start or ""
-            res_model = "account.account"
-        return {
-            "res_model": res_model,
-            "res_id": record["id"],
-            "DT_ALT": declaration.DT_INI,
-            "COD_NAT": natureza,
-            "IND_CTA": "S" if sintetica else "A",
-            # O nível é a profundidade do código no plano: "1" é 1, "1.1" é 2.
-            "NIVEL": codigo.count(".") + 1,
-            "COD_CTA": codigo,
-            "COD_CTA_SUP": superior,
-            "CTA": nome,
-        }
 
 
 class RegistroI051(models.Model):
@@ -497,12 +490,105 @@ class RegistroI150(models.Model):
     _name = "l10n_br_sped.ecd.i150"
     _inherit = "l10n_br_sped.ecd.9.i150"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "DT_INI": 0,  # Data de início do período.
-    #         "DT_FIN": 0,  # Data de fim do período.
-    #     }
+    @api.model
+    def _iter_months(self, dt_ini, dt_fin):
+        from calendar import monthrange
+        from datetime import date
+
+        year, month = dt_ini.year, dt_ini.month
+        while (year, month) <= (dt_fin.year, dt_fin.month):
+            first = date(year, month, 1)
+            last = date(year, month, monthrange(year, month)[1])
+            yield max(first, dt_ini), min(last, dt_fin)
+            month += 1
+            if month > 12:
+                month, year = 1, year + 1
+
+    @api.model
+    def _pull_records_from_odoo(
+        self, kind, level, parent_register=None, parent_record=None, log_msg=None
+    ):
+        declaration = self._context["declaration"]
+        company = declaration.company_id
+        AML = self.env["account.move.line"].with_company(company)
+        i155_model = self.env["l10n_br_sped.ecd.i155"]
+
+        for period_ini, period_fin in self._iter_months(
+            declaration.DT_INI, declaration.DT_FIN
+        ):
+            month_lines = AML.search(
+                [
+                    ("company_id", "=", company.id),
+                    ("parent_state", "=", "posted"),
+                    ("account_id", "!=", False),
+                    ("date", ">=", period_ini),
+                    ("date", "<=", period_fin),
+                ]
+            )
+            if not month_lines:
+                continue
+
+            movement = {}
+            for line in month_lines:
+                acc = movement.setdefault(line.account_id, [0.0, 0.0])
+                acc[0] += line.debit
+                acc[1] += line.credit
+
+            opening = dict.fromkeys(movement, 0.0)
+            prior = AML.search(
+                [
+                    ("company_id", "=", company.id),
+                    ("parent_state", "=", "posted"),
+                    ("account_id", "in", [a.id for a in movement]),
+                    ("date", "<", period_ini),
+                ]
+            )
+            for line in prior:
+                opening[line.account_id] += line.balance
+
+            i150 = self.create(
+                {
+                    "DT_INI": period_ini,
+                    "DT_FIN": period_fin,
+                    "declaration_id": declaration.id,
+                    "reg_I150_ids_RegistroI010_id": parent_register.id
+                    if parent_register
+                    else False,
+                }
+            )
+
+            for account in sorted(
+                movement, key=lambda a: a.with_company(company).code or ""
+            ):
+                debit, credit = movement[account]
+                sld_ini = opening.get(account, 0.0)
+                sld_fin = sld_ini + debit - credit
+                dc_ini = "D" if sld_ini >= 0 else "C"
+                dc_fin = "D" if sld_fin >= 0 else "C"
+                i155_model.create(
+                    {
+                        "COD_CTA": account.with_company(company).code,
+                        "VL_SLD_INI": abs(sld_ini),
+                        "IND_DC_INI": dc_ini,
+                        "VL_DEB": debit,
+                        "VL_CRED": credit,
+                        "VL_SLD_FIN": abs(sld_fin),
+                        "IND_DC_FIN": dc_fin,
+                        "VL_SLD_INI_MF": abs(sld_ini),
+                        "IND_DC_INI_MF": dc_ini,
+                        "VL_DEB_MF": debit,
+                        "VL_CRED_MF": credit,
+                        "VL_SLD_FIN_MF": abs(sld_fin),
+                        "IND_DC_FIN_MF": dc_fin,
+                        "declaration_id": declaration.id,
+                        "reg_I155_ids_RegistroI150_id": i150.id,
+                    }
+                )
+
+        if log_msg is not None:
+            self._log_chatter_sped_item(
+                log_msg, level, self.search([("declaration_id", "=", declaration.id)])
+            )
 
 
 class RegistroI155(models.Model):
@@ -561,35 +647,22 @@ class RegistroI200(models.Model):
 
     @api.model
     def _odoo_domain(self, parent_record, declaration):
-        if declaration.debug:
-            return []
-        else:
-            return [
-                ("company_id", "=", declaration.company_id.id),
-                # `open` é estado de fatura de versões antigas; em `account.move`
-                # o lançamento lançado é `posted`. Com o valor antigo o domínio
-                # não casava nada e a ECD saía sem um único lançamento contábil.
-                ("state", "=", "posted"),
-                ("date", ">=", declaration.DT_INI),
-                ("date", "<=", declaration.DT_FIN),
-            ]
+        return [
+            ("company_id", "=", declaration.company_id.id),
+            ("state", "=", "posted"),
+            ("date", ">=", declaration.DT_INI),
+            ("date", "<=", declaration.DT_FIN),
+        ]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
-        # O valor do lançamento é a soma dos débitos das suas partidas — que em
-        # partida dobrada é igual à dos créditos. `fiscal_amount_total` só tem
-        # valor quando a `account.move` é documento fiscal, e a maior parte dos
-        # lançamentos de uma escrituração não é: com ele, o campo saía vazio em
-        # todos os lançamentos que não vieram de nota.
-        valor = sum(record.line_ids.mapped("debit"))
         return {
             "NUM_LCTO": record.name,  # Número ou Código de identificação
-            "DT_LCTO": record.date,  # Data do lançamento.
-            "VL_LCTO": valor,  # Valor do lançamento.
+            "DT_LCTO": record.create_date,  # Data do lançamento.
+            "VL_LCTO": record.amount_total,  # Valor do lançamento.
             "IND_LCTO": "N",
             "DT_LCTO_EXT": record.date,  # O Data de ocorrência dos fatos
-            # Valor do lançamento em moeda funcional
-            "VL_LCTO_MF": valor,
+            "VL_LCTO_MF": record.amount_total,  # Valor do lançamento em moeda funcional
         }
 
 
@@ -607,30 +680,25 @@ class RegistroI250(models.Model):
             ("company_id", "=", declaration.company_id.id),
             ("parent_state", "=", "posted"),
             ("move_id", "=", parent_record.id),
-            # Na 18 nenhuma linha tem `display_type` falso: linha de produto é
-            # `product`, a do prazo é `payment_term`, imposto é `tax`. Filtrar
-            # por `False` descartava TODAS as partidas, e o lançamento saía sem
-            # nenhuma. O que não é partida contábil é seção e anotação.
             ("display_type", "not in", ("line_section", "line_note")),
+            ("account_id", "!=", False),
         ]
 
     @api.model
     def _map_from_odoo(self, record, parent_record, declaration, index=0):
         return {
-            "COD_CTA": record.account_id.code,
+            "COD_CTA": record.account_id.with_company(declaration.company_id).code,
             # "COD_CCUS": 0,  # Código do centro de custos.
-            # O valor da partida no SPED é absoluto — o sinal quem dá é o
-            # IND_DC. `amount_currency` é sinalizado e vem na moeda da linha.
-            "VL_DC": record.debit or record.credit,  # Valor da partida.
+            "VL_DC": record.debit or record.credit,  # Valor da partida (magnitude).
             "IND_DC": record.debit > 0
             and "D"
             or "C",  # Indicador da natureza da partida: D - Débito; C - Cré...
             # "NUM_ARQ": 0,  # Número, Código ou caminho de localização dos documen...
             # "COD_HIST_PAD": 0,  # Código do histórico padronizado, conforme tabel...
             # "HIST": 0,  # O Histórico completo da partida ou histórico complement...
-            # Mesma chave do 0150: CNPJ/CPF, não o id do Odoo.
-            "COD_PART": record.partner_id.cnpj_cpf_stripped or "",
-            "VL_DC_MF": record.debit or record.credit,  # Valor em moeda funcional
+            "COD_PART": record.partner_id.id,  # ?,  # Código identificação participante
+            "VL_DC_MF": record.debit
+            or record.credit,  # Valor da partida em moeda funcional
             # "IND_DC_MF": 0,  # Indicador da natureza da partida em moeda funciona...
         }
 
@@ -675,11 +743,68 @@ class RegistroI350(models.Model):
     _name = "l10n_br_sped.ecd.i350"
     _inherit = "l10n_br_sped.ecd.9.i350"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "DT_RES": 0,  # Data da apuração do resultado.
-    #     }
+    @api.model
+    def _pull_records_from_odoo(
+        self, kind, level, parent_register=None, parent_record=None, log_msg=None
+    ):
+        declaration = self._context["declaration"]
+        company = declaration.company_id
+        AML = self.env["account.move.line"].with_company(company)
+        i355_model = self.env["l10n_br_sped.ecd.i355"]
+        dt_res = declaration.DT_FIN
+
+        lines = AML.search(
+            [
+                ("company_id", "=", company.id),
+                ("parent_state", "=", "posted"),
+                ("account_id.internal_group", "in", ("income", "expense")),
+                ("date", ">=", declaration.DT_INI),
+                ("date", "<=", dt_res),
+            ]
+        )
+        balances = {}
+        for line in lines:
+            balances[line.account_id] = (
+                balances.get(line.account_id, 0.0) + line.balance
+            )
+        balances = {
+            acc: bal
+            for acc, bal in balances.items()
+            if not company.currency_id.is_zero(bal)
+        }
+        if not balances:
+            return
+
+        i350 = self.create(
+            {
+                "DT_RES": dt_res,
+                "declaration_id": declaration.id,
+                "reg_I350_ids_RegistroI010_id": parent_register.id
+                if parent_register
+                else False,
+            }
+        )
+        for account in sorted(
+            balances, key=lambda a: a.with_company(company).code or ""
+        ):
+            balance = balances[account]
+            dc = "D" if balance >= 0 else "C"
+            i355_model.create(
+                {
+                    "COD_CTA": account.with_company(company).code,
+                    "VL_CTA": abs(balance),
+                    "IND_DC": dc,
+                    "VL_CTA_MF": abs(balance),
+                    "IND_DC_MF": dc,
+                    "declaration_id": declaration.id,
+                    "reg_I355_ids_RegistroI350_id": i350.id,
+                }
+            )
+
+        if log_msg is not None:
+            self._log_chatter_sped_item(
+                log_msg, level, self.search([("declaration_id", "=", declaration.id)])
+            )
 
 
 class RegistroI355(models.Model):
@@ -796,14 +921,14 @@ class RegistroJ005(models.Model):
     _name = "l10n_br_sped.ecd.j005"
     _inherit = "l10n_br_sped.ecd.9.j005"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "DT_INI": 0,  # O Data inicial das demonstrações contábeis. bservação...
-    #         "DT_FIN": 0,  # Data final das demonstrações contábeis.
-    #         "ID_DEM": 0,  # Identificação das demonstrações: 1 – demonstrações co...
-    #         "CAB_DEM": 0,  # Cabeçalho das demonstrações.
-    #     }
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        return {
+            "DT_INI": declaration.DT_INI,
+            "DT_FIN": declaration.DT_FIN,
+            "ID_DEM": 1,  # 1 - demonstrações contábeis do empresário/sociedade
+            "CAB_DEM": "DEMONSTRAÇÕES CONTÁBEIS DO EXERCÍCIO",
+        }
 
 
 class RegistroJ100(models.Model):
@@ -813,21 +938,94 @@ class RegistroJ100(models.Model):
     _name = "l10n_br_sped.ecd.j100"
     _inherit = "l10n_br_sped.ecd.9.j100"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "COD_AGL": 0,  # O Código de aglutinação atribuído pela pessoa jurídi...
-    #         "IND_COD_AGL": 0,  # Indicador do tipo de código de aglutinação das l...
-    #         "NIVEL_AGL": 0,  # Nível do Código de aglutinação (mesmo conceito do ...
-    #         "COD_AGL_SUP": 0,  # Código de aglutinação sintético/grupo de código ...
-    #         "IND_GRP_BAL": 0,  # Indicador de grupo do balanço: A – Ativo; P – Pa...
-    #         "DESCR_COD_AGL": 0,  # Descrição do Código de aglutinação.
-    #         "VL_CTA_INI": 0,  # Valor inicial do código de aglutinação no Balanço...
-    #         "IND_DC_CTA_INI": 0,  # Indicador da situação do saldo inicial inform...
-    #         "VL_CTA_FIN": 0,  # Valor final do código de aglutinação no Balanço P...
-    #         "IND_DC_CTA_FIN": 0,  # Indicador da situação do saldo final informad...
-    #         "NOTA_EXP_REF": 0,  # Referência a numeração das notas explicativas r...
-    #     }
+    @api.model
+    def _rollup_group_balances(self, declaration, internal_groups):
+        company = declaration.company_id
+        AML = self.env["account.move.line"].with_company(company)
+        accounts = (
+            self.env["account.account"]
+            .with_company(company)
+            .search([("internal_group", "in", internal_groups)])
+        )
+
+        def by_account(date_domain):
+            res = {}
+            for line in AML.search(
+                [
+                    ("company_id", "=", company.id),
+                    ("parent_state", "=", "posted"),
+                    ("account_id", "in", accounts.ids),
+                ]
+                + date_domain
+            ):
+                res[line.account_id.id] = (
+                    res.get(line.account_id.id, 0.0) + line.balance
+                )
+            return res
+
+        closing = by_account([("date", "<=", declaration.DT_FIN)])
+        opening = by_account([("date", "<", declaration.DT_INI)])
+
+        grp_close, grp_open, grp_nat = {}, {}, {}
+        for account in accounts:
+            grp = account.group_id
+            while grp:
+                grp_close[grp.id] = grp_close.get(grp.id, 0.0) + closing.get(
+                    account.id, 0.0
+                )
+                grp_open[grp.id] = grp_open.get(grp.id, 0.0) + opening.get(
+                    account.id, 0.0
+                )
+                grp_nat.setdefault(grp.id, account.internal_group)
+                grp = grp.parent_id
+
+        groups = (
+            self.env["account.group"]
+            .with_company(company)
+            .browse(list(grp_close))
+            .sorted(lambda g: g.code_prefix_start or "")
+        )
+        return groups, grp_open, grp_close, grp_nat
+
+    @api.model
+    def _pull_records_from_odoo(
+        self, kind, level, parent_register=None, parent_record=None, log_msg=None
+    ):
+        declaration = self._context["declaration"]
+        groups, grp_open, grp_close, grp_nat = self._rollup_group_balances(
+            declaration, ("asset", "liability", "equity")
+        )
+
+        def level_of(grp):
+            depth, parent = 1, grp.parent_id
+            while parent:
+                depth, parent = depth + 1, parent.parent_id
+            return depth
+
+        for grp in groups:
+            vl_ini, vl_fin = grp_open.get(grp.id, 0.0), grp_close.get(grp.id, 0.0)
+            self.create(
+                {
+                    "COD_AGL": grp.code_prefix_start,
+                    "IND_COD_AGL": "S",
+                    "NIVEL_AGL": level_of(grp),
+                    "COD_AGL_SUP": grp.parent_id.code_prefix_start or "",
+                    "IND_GRP_BAL": "A" if grp_nat.get(grp.id) == "asset" else "P",
+                    "DESCR_COD_AGL": grp.name,
+                    "VL_CTA_INI": abs(vl_ini),
+                    "IND_DC_CTA_INI": "D" if vl_ini >= 0 else "C",
+                    "VL_CTA_FIN": abs(vl_fin),
+                    "IND_DC_CTA_FIN": "D" if vl_fin >= 0 else "C",
+                    "declaration_id": declaration.id,
+                    "reg_J100_ids_RegistroJ005_id": parent_register.id
+                    if parent_register
+                    else False,
+                }
+            )
+        if log_msg is not None:
+            self._log_chatter_sped_item(
+                log_msg, level, self.search([("declaration_id", "=", declaration.id)])
+            )
 
 
 class RegistroJ150(models.Model):
@@ -837,22 +1035,46 @@ class RegistroJ150(models.Model):
     _name = "l10n_br_sped.ecd.j150"
     _inherit = "l10n_br_sped.ecd.9.j150"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "NU_ORDEM": 0,  # O Número de ordem da linha na visualização da demon...
-    #         "COD_AGL": 0,  # O Código de aglutinação das linhas, atribuído pela p...
-    #         "IND_COD_AGL": 0,  # Indicador do tipo de código de aglutinação das l...
-    #         "NIVEL_AGL": 0,  # Nível do Código de aglutinação (mesmo conceito do ...
-    #         "COD_AGL_SUP": 0,  # Código de aglutinação sintético/grupo de código ...
-    #         "DESCR_COD_AGL": 0,  # Descrição do Código de aglutinação.
-    #         "VL_CTA_INI_": 0,  # Valor do saldo final da linha no período imediat...
-    #         "IND_DC_CTA_INI": 0,  # Indicador da situação do valor final da linha...
-    #         "VL_CTA_FIN": 0,  # Valor final da linha antes do encerramento do exe...
-    #         "IND_DC_CTA_FIN": 0,  # Indicador da situação do valor final da linha...
-    #         "IND_GRP_DRE": 0,  # D R Indicador de grupo da DRE: – Linha totalizad...
-    #         "NOTA_EXP_REF": 0,  # Referência a numeração das notas explicativas r...
-    #     }
+    @api.model
+    def _pull_records_from_odoo(
+        self, kind, level, parent_register=None, parent_record=None, log_msg=None
+    ):
+        declaration = self._context["declaration"]
+        groups, grp_open, grp_close, _grp_nat = self.env[
+            "l10n_br_sped.ecd.j100"
+        ]._rollup_group_balances(declaration, ("income", "expense"))
+
+        def level_of(grp):
+            depth, parent = 1, grp.parent_id
+            while parent:
+                depth, parent = depth + 1, parent.parent_id
+            return depth
+
+        for order, grp in enumerate(groups, start=1):
+            vl_ini, vl_fin = grp_open.get(grp.id, 0.0), grp_close.get(grp.id, 0.0)
+            self.create(
+                {
+                    "NU_ORDEM": str(order),
+                    "COD_AGL": grp.code_prefix_start,
+                    "IND_COD_AGL": "S",
+                    "NIVEL_AGL": level_of(grp),
+                    "COD_AGL_SUP": grp.parent_id.code_prefix_start or "",
+                    "DESCR_COD_AGL": grp.name,
+                    "VL_CTA_INI_": abs(vl_ini),
+                    "IND_DC_CTA_INI": "D" if vl_ini >= 0 else "C",
+                    "VL_CTA_FIN": abs(vl_fin),
+                    "IND_DC_CTA_FIN": "D" if vl_fin >= 0 else "C",
+                    "IND_GRP_DRE": "",
+                    "declaration_id": declaration.id,
+                    "reg_J150_ids_RegistroJ005_id": parent_register.id
+                    if parent_register
+                    else False,
+                }
+            )
+        if log_msg is not None:
+            self._log_chatter_sped_item(
+                log_msg, level, self.search([("declaration_id", "=", declaration.id)])
+            )
 
 
 class RegistroJ210(models.Model):
@@ -937,17 +1159,18 @@ class RegistroJ900(models.Model):
     _name = "l10n_br_sped.ecd.j900"
     _inherit = "l10n_br_sped.ecd.9.j900"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "DNRC_ENCER": 0,  # Texto fixo contendo “TERMO DE ENCERRAMENTO”.
-    #         "NUM_ORD": 0,  # Número de ordem do instrumento de escrituração.
-    #         "NAT_LIVRO": 0,  # Natureza do livro; finalidade a que se destinou o ...
-    #         "NOME": 0,  # Nome empresarial.
-    #         "QTD_LIN": 0,  # Quantidade total de linhas do arquivo digital.
-    #         "DT_INI_ESCR": 0,  # Data de início da escrituração.
-    #         "DT_FIN_ESCR": 0,  # Data de término da escrituração.
-    #     }
+    @api.model
+    def _map_from_odoo(self, record, parent_record, declaration, index=0):
+        company = declaration.company_id
+        return {
+            "DNRC_ENCER": "TERMO DE ENCERRAMENTO",
+            "NUM_ORD": 1,
+            "NAT_LIVRO": "LIVRO DIÁRIO COM ESCRITURAÇÃO COMPLETA",
+            "NOME": company.legal_name or company.name,
+            "QTD_LIN": 0,
+            "DT_INI_ESCR": declaration.DT_INI,
+            "DT_FIN_ESCR": declaration.DT_FIN,
+        }
 
 
 class RegistroJ930(models.Model):
@@ -957,21 +1180,31 @@ class RegistroJ930(models.Model):
     _name = "l10n_br_sped.ecd.j930"
     _inherit = "l10n_br_sped.ecd.9.j930"
 
-    # @api.model
-    # def _map_from_odoo(self, record, parent_record, declaration, index=0):
-    #     return {
-    #         "IDENT_NOM": 0,  # Nome do signatário.
-    #         "IDENT_CPF_CNPJ": 0,  # CPF ou CNPJ
-    #         "IDENT_QUALIF": 0,  # Qualificação do assinante, conforme tabela.
-    #         "COD_ASSIN": 0,  # Código de qualificação do assinante, conforme tabe...
-    #         "IND_CRC": 0,  # Número de inscrição do contabilista no Conselho Regi...
-    #         "EMAIL": 0,  # Email do signatário.
-    #         "FONE": 0,  # Telefone do signatário.
-    #         "UF_CRC": 0,  # Indicação da unidade da federação que expediu o CRC.
-    #         "NUM_SEQ_CRC": 0,  # Número da Certidão de Regularidade Profissional ...
-    #         "DT_CRC": 0,  # Data de validade da Certidão de Regularidade Profissi...
-    #         "IND_RESP_LEGAL": 0,  # Identificação do signatário que será validado...
-    #     }
+    @api.model
+    def _pull_records_from_odoo(
+        self, kind, level, parent_register=None, parent_record=None, log_msg=None
+    ):
+        declaration = self._context["declaration"]
+        partner = declaration.company_id.partner_id
+        self.create(
+            {
+                "IDENT_NOM": partner.name,
+                "IDENT_CPF_CNPJ": misc.punctuation_rm(partner.vat or ""),
+                "IDENT_QUALIF": "Administrador",
+                "COD_ASSIN": "205",  # SPED signer qualification: administrador
+                "EMAIL": partner.email or "",
+                "FONE": misc.punctuation_rm(partner.phone or ""),
+                "IND_RESP_LEGAL": "S",
+                "declaration_id": declaration.id,
+                "reg_J930_ids_RegistroJ900_id": parent_register.id
+                if parent_register
+                else False,
+            }
+        )
+        if log_msg is not None:
+            self._log_chatter_sped_item(
+                log_msg, level, self.search([("declaration_id", "=", declaration.id)])
+            )
 
 
 class RegistroJ932(models.Model):
