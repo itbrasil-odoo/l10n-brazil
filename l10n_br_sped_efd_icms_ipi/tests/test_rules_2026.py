@@ -604,9 +604,15 @@ class TestPvaRules(Rules2026Common):
                 )
             ],
         )
+        # a compra só é crédito com impostos dedutíveis na operação (Guia C170)
+        compras = self.env.ref("l10n_br_fiscal.fo_compras")
+        compras.with_company(self.company).deductible_taxes = True
         totals = icms_document_totals(self.env, self.declaration)
         self.assertAlmostEqual(totals["debit"], 18.0, places=2)
         self.assertAlmostEqual(totals["credit"], 10.0, places=2)
+        compras.with_company(self.company).deductible_taxes = False
+        totals = icms_document_totals(self.env, self.declaration)
+        self.assertAlmostEqual(totals["credit"], 3.0, places=2, msg="só o 5605")
 
     def test_entry_whose_bill_was_cancelled_is_not_bookkept(self):
         """A loja cancela a fatura de entrada e relança a mesma NF-e.
@@ -747,3 +753,58 @@ class TestPvaRules(Rules2026Common):
         self.assertEqual(first, second)
         log = self.declaration.message_ids[:1].body
         self.assertNotIn("&lt;h3&gt;", log, "o histórico não pode mostrar as tags")
+
+    def test_entry_with_st_is_cst_60_without_icms(self):
+        """Guia C170: compra para revenda com ST retido = CST 60, sem ICMS.
+
+        O fornecedor manda CST 10 com o ICMS próprio destacado; o declarante
+        não se credita (vende com CST 60) e escritura sob o seu enfoque.
+        """
+        self.partner.state_id = self.env.ref("base.state_br_sp")
+        document = self._document(
+            100,
+            fiscal_operation_type="in",
+            issuer="partner",
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_2403").id,
+                    icms_cst_id=self.env.ref("l10n_br_fiscal.cst_icms_10").id,
+                    icms_base=100.0,
+                    icms_percent=12.0,
+                    icms_value=12.0,
+                    icmsst_value=8.0,
+                )
+            ],
+        )
+        c100 = self._c100_of(document)
+        c170 = c100.reg_C170_ids
+        self.assertEqual(c170.CST_ICMS[-2:], "60")
+        self.assertAlmostEqual(c170.VL_ICMS, 0.0, places=2)
+        self.assertAlmostEqual(c170.VL_BC_ICMS, 0.0, places=2)
+        self.assertAlmostEqual(c100.VL_ICMS, 0.0, places=2)
+        c190 = c100.reg_C190_ids
+        self.assertEqual(c190.CST_ICMS[-2:], "60")
+        self.assertAlmostEqual(c190.VL_ICMS, 0.0, places=2)
+
+    def test_creditable_entry_keeps_its_icms(self):
+        """Com impostos dedutíveis na operação, a entrada tributada credita."""
+        self.env.ref("l10n_br_fiscal.fo_compras").with_company(
+            self.company
+        ).deductible_taxes = True
+        document = self._document(
+            101,
+            fiscal_operation_type="in",
+            issuer="partner",
+            lines=[
+                self._icms_line(
+                    cfop_id=self.env.ref("l10n_br_fiscal.cfop_1102").id,
+                    icms_cst_id=self.env.ref("l10n_br_fiscal.cst_icms_00").id,
+                    icms_base=100.0,
+                    icms_percent=18.0,
+                    icms_value=18.0,
+                )
+            ],
+        )
+        c170 = self._c100_of(document).reg_C170_ids
+        self.assertEqual(c170.CST_ICMS[-2:], "00")
+        self.assertAlmostEqual(c170.VL_ICMS, 18.0, places=2)
