@@ -414,6 +414,8 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "_pull_records_from_odoo",
                 side_effect=ValueError("broken mapping"),
             ),
+            # the pull flushes first; flushing is not what this test is about
+            patch.object(type(self.env["l10n_br_sped.mixin"]), "_flush_registers"),
         ):
             declaration.button_populate_sped_from_odoo()
         self.assertIn("broken mapping", declaration.pull_error)
@@ -455,6 +457,8 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "_pull_records_from_odoo",
                 side_effect=mock_j900_pull_func,
             ),
+            # the pull flushes first; flushing is not what this test is about
+            patch.object(type(self.env["l10n_br_sped.mixin"]), "_flush_registers"),
         ):
             declaration.button_populate_sped_from_odoo()
 

@@ -734,3 +734,16 @@ class TestPvaRules(Rules2026Common):
                 continue
             partner.cnae_main_id = cnae
             self.assertEqual(activity_indicator(self.company), expected, code)
+
+    def test_pulling_twice_does_not_duplicate_registers(self):
+        """Trazer registros de novo substitui, não soma (dois E110 = arquivo errado)."""
+        self._document(90, lines=[self._icms_line()])
+        self.declaration.button_populate_sped_from_odoo()
+        C100 = self.env["l10n_br_sped.efd_icms_ipi.c100"]
+        first = C100.search_count([("declaration_id", "=", self.declaration.id)])
+        self.declaration.button_populate_sped_from_odoo()
+        second = C100.search_count([("declaration_id", "=", self.declaration.id)])
+        self.assertTrue(first)
+        self.assertEqual(first, second)
+        log = self.declaration.message_ids[:1].body
+        self.assertNotIn("&lt;h3&gt;", log, "o histórico não pode mostrar as tags")

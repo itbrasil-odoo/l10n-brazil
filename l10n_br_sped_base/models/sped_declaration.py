@@ -10,6 +10,8 @@ from io import StringIO
 import pytz
 from lxml.builder import E
 
+from markupsafe import Markup
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -234,6 +236,10 @@ class SpedDeclaration(models.AbstractModel):
         log_msg = StringIO()
         log_msg.write(f"<h3>{_('Pulled from Odoo')}</h3>")
         kind = self._get_kind()
+        # Pulling again must replace, not add: without this a second click
+        # duplicated every register (two E110, every C100 twice) and the file
+        # came out wrong unless someone remembered to flush first.
+        self.env["l10n_br_sped.mixin"]._flush_registers(kind, self.id)
         mixin_env = self.env["l10n_br_sped.mixin"].with_context(
             company_id=self.company_id.id,
             declaration=self,
@@ -280,13 +286,14 @@ class SpedDeclaration(models.AbstractModel):
         # has no data (a lost 0140 still makes a well-formed file). So the
         # failure is kept on the declaration and blocks the file generation.
         self.pull_error = "\n".join(errors) or False
-        self.message_post(body=log_msg.getvalue())
+        # the log is HTML built here; posted as text it showed the raw tags
+        self.message_post(body=Markup(log_msg.getvalue()))
 
     def button_flush_registers(self):
         self.ensure_one()
         self.env["l10n_br_sped.mixin"]._flush_registers(self._get_kind(), self.id)
         self.message_post(
-            body=f"<h3>{_('Flushed all Registers from Declaration!')}</h3>"
+            body=Markup("<h3>%s</h3>") % _("Flushed all Registers from Declaration!")
         )
 
     def button_done(self):
