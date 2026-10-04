@@ -351,6 +351,18 @@ def obligation_code_and_due(env, declaration, kind, uf_code, code=None, due=None
     )
 
 
+def activity_indicator(company):
+    """IND_ATIV suggested by the company's main CNAE (Guia Prático, 0000).
+
+    0 for the manufacturing industry (CNAE section C, divisions 10 to 33),
+    1 otherwise. Being "equiparado a industrial" depends on the IPI law, not
+    on the CNAE, so this is only the default of an editable field.
+    """
+    cnae = company.partner_id.cnae_main_id if company else False
+    division = (cnae.code or "")[:2] if cnae else ""
+    return "0" if division.isdigit() and 10 <= int(division) <= 33 else "1"
+
+
 # CSOSN of a Simples Nacional supplier -> CST_ICMS on the declarant's side.
 # Guia Prático, Tabela 4.3.1 (Seção 2): the CSOSN is only for issuing; the
 # entry is written with the CST "sob o enfoque do declarante" (C170 campo 10):
@@ -625,8 +637,18 @@ class Registro0000(models.Model):
             ("1", "Outros"),
         ],
         string="Indicador tipo atividade",
-        default="0",
+        default=lambda self: activity_indicator(self.env.company),
+        help="Guia Prático, 0000 campo 15: 0 = industrial ou equiparado a "
+        "industrial, 1 = outros. Sugerido pelo CNAE principal da empresa "
+        "(divisões 10 a 33, indústria de transformação); confira se a empresa "
+        "é equiparada a industrial pela legislação do IPI.",
     )
+
+    @api.onchange("company_id")
+    def _onchange_company_activity_indicator(self):
+        for declaration in self:
+            if declaration.company_id:
+                declaration.IND_ATIV = activity_indicator(declaration.company_id)
 
     CLAS_ESTAB_IND = fields.Selection(
         [
@@ -659,8 +681,14 @@ class Registro0000(models.Model):
         group.append(E.field(name="cod_receita_st", readonly=EDITABLE_ON_DRAFT))
         group.append(E.field(name="dt_vcto_obrigacao_st", readonly=EDITABLE_ON_DRAFT))
         group.append(E.field(name="ind_apur", required="1", readonly=EDITABLE_ON_DRAFT))
+        # Guia Prático, 0002: only for an industrial establishment (IND_ATIV 0)
         group.append(
-            E.field(name="CLAS_ESTAB_IND", required="1", readonly=EDITABLE_ON_DRAFT)
+            E.field(
+                name="CLAS_ESTAB_IND",
+                required="IND_ATIV == '0'",
+                invisible="IND_ATIV != '0'",
+                readonly=EDITABLE_ON_DRAFT,
+            )
         )
         group.append(
             E.field(name="ind_tp_leiaute", required="1", readonly=EDITABLE_ON_DRAFT)
