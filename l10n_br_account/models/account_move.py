@@ -209,14 +209,10 @@ class AccountMove(models.Model):
         customer, rejected by SEFAZ with "idDest <> 2").
         """
         for move in self:
-            lines = move.invoice_line_ids.filtered(
-                lambda line: (
-                    line.display_type == "product"
-                    and line.proxy_partner_id != move.commercial_partner_id
-                )
-            )
-            for line in lines:
-                line.proxy_partner_id = move.commercial_partner_id
+            partner = move.commercial_partner_id
+            for line in move.invoice_line_ids:
+                if line.display_type == "product" and line.proxy_partner_id != partner:
+                    line.proxy_partner_id = partner
 
     @api.constrains("fiscal_document_id", "document_type_id")
     def _check_fiscal_document_type(self):

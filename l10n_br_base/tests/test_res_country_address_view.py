@@ -20,4 +20,4 @@ class TestResCountryAddressView(TransactionCase):
             self.env.ref("base.view_partner_form").id, "form"
         )["arch"]
         for field in ("street_name", "street_number", "district", "city_id"):
-            self.assertIn('name="%s"' % field, arch)
+            self.assertIn(f'name="{field}"', arch)
