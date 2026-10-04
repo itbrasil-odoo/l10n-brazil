@@ -719,3 +719,18 @@ class TestPvaRules(Rules2026Common):
             defaults = self.env[model].default_get(["DT_INI", "DT_FIN"])
             self.assertEqual(defaults["DT_INI"], last.replace(day=1), model)
             self.assertEqual(defaults["DT_FIN"], last, model)
+
+    def test_activity_indicator_follows_the_cnae(self):
+        """Comércio (CNAE 4530) não é industrial; indústria (2211) é."""
+        from odoo.addons.l10n_br_sped_efd_icms_ipi.models.sped_efd_icms_ipi import (
+            activity_indicator,
+        )
+
+        Cnae = self.env["l10n_br_fiscal.cnae"]
+        partner = self.company.partner_id
+        for code, expected in (("4530-7/05", "1"), ("2211-1/00", "0")):
+            cnae = Cnae.search([("code", "=", code)], limit=1)
+            if not cnae:
+                continue
+            partner.cnae_main_id = cnae
+            self.assertEqual(activity_indicator(self.company), expected, code)

@@ -283,11 +283,13 @@ class TestBlocoE5(common.TransactionCase):
         )
         cls.assessment.state = "posted"
 
+        # o bloco E5 (IPI) só existe para contribuinte do IPI (IND_ATIV 0)
         cls.declaration = cls.env["l10n_br_sped.efd_icms_ipi.0000"].create(
             {
                 "company_id": cls.company.id,
                 "DT_INI": "2026-07-01",
                 "DT_FIN": "2026-07-31",
+                "IND_ATIV": "0",
             }
         )
 
