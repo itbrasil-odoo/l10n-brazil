@@ -701,3 +701,21 @@ class TestPvaRules(Rules2026Common):
         e250 = self._pull("l10n_br_sped.efd_icms_ipi.e200").reg_E210_ids.reg_E250_ids
         self.assertEqual(e250.COD_REC, "2204")
         self.assertEqual(str(e250.DT_VCTO), "2026-10-09")
+
+    def test_new_declaration_defaults_to_the_previous_month(self):
+        """Livro mensal: a declaração nova nasce no mês que acabou de fechar."""
+        from datetime import timedelta
+
+        from odoo import fields
+
+        first = fields.Date.context_today(self.env.user).replace(day=1)
+        last = first - timedelta(days=1)
+        for model in (
+            "l10n_br_sped.efd_icms_ipi.0000",
+            "l10n_br_sped.efd_pis_cofins.0000",
+        ):
+            if model not in self.env:
+                continue
+            defaults = self.env[model].default_get(["DT_INI", "DT_FIN"])
+            self.assertEqual(defaults["DT_INI"], last.replace(day=1), model)
+            self.assertEqual(defaults["DT_FIN"], last, model)
