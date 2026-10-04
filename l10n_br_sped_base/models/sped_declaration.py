@@ -229,8 +229,42 @@ class SpedDeclaration(models.AbstractModel):
             # TODO: Complementar com unidades de medidas de outros blocos!!!
             record.fiscal_uom_ids = record.fiscal_document_line_ids.mapped("uom_id")
 
+    def _sped_companies(self):
+        """Companies whose documents the declaration reads."""
+        return self.company_id
+
+    def _with_sped_companies(self):
+        """The declaration read across its own companies.
+
+        Odoo's multi-company rules only show the documents of the companies
+        selected in the switcher. A declaration for another company (or, in the
+        EFD-Contribuições, the branches of the legal entity) silently came out
+        empty or partial. The user must have access to those companies; the
+        switcher selection no longer matters.
+        """
+        self.ensure_one()
+        if self.env.su:
+            return self
+        # read without the access rules: a company the user cannot see would
+        # otherwise just drop out of the list, and the file come out partial
+        companies = self.sudo()._sped_companies()
+        missing = companies - self.env.user.sudo().company_ids
+        if missing:
+            raise UserError(
+                _(
+                    "Você não tem acesso a estas empresas da declaração: "
+                    "%(names)s. Peça o acesso ou retire-as da declaração.",
+                    names=", ".join(missing.mapped("name")),
+                )
+            )
+        return self.with_context(allowed_company_ids=companies.ids)
+
     def button_populate_sped_from_odoo(self):
         """Populate SPED registers from Odoo."""
+        self.ensure_one()
+        return self._with_sped_companies()._populate_sped_from_odoo()
+
+    def _populate_sped_from_odoo(self):
         # TODO add cron pulling from Odoo for open declarations
         self.ensure_one()
         log_msg = StringIO()
@@ -304,6 +338,10 @@ class SpedDeclaration(models.AbstractModel):
 
     def button_create_sped_files(self):
         """Generate and attach the SPED file."""
+        self.ensure_one()
+        return self._with_sped_companies()._create_sped_files()
+
+    def _create_sped_files(self):
         self.ensure_one()
         if self.pull_error:
             raise UserError(

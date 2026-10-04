@@ -478,6 +478,10 @@ class Registro0000(models.Model):
         )
         return res
 
+    def _sped_companies(self):
+        # one file for the whole legal entity: 0140/C010 per establishment
+        return super()._sped_companies() | self.establishment_ids
+
     @api.depends("company_id")
     def _compute_cod_inc_trib(self):
         for declaration in self:
