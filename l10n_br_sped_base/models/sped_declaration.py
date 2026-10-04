@@ -39,6 +39,18 @@ def period_bounds_utc(env, date_from, date_to):
     )
 
 
+
+def previous_month(env):
+    """First and last day of the month before today (user's timezone).
+
+    The monthly tax books (EFD ICMS/IPI, EFD-Contribuições) are filed for the
+    month just closed, so that is the useful default; the base default (a
+    year back to a year ahead) only suits an annual book like the ECD.
+    """
+    first = fields.Date.context_today(env["res.users"]).replace(day=1)
+    last = first - timedelta(days=1)
+    return last.replace(day=1), last
+
 class SpedDeclaration(models.AbstractModel):
     _name = "l10n_br_sped.declaration"
     _description = "Sped Declaration"
