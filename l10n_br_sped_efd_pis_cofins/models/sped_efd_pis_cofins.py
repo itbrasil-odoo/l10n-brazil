@@ -17,6 +17,7 @@ from odoo.addons.l10n_br_fiscal.constants.fiscal import (
     DOCUMENT_ISSUER_COMPANY,
     FISCAL_IN,
 )
+from odoo.addons.l10n_br_sped_base.models.sped_declaration import previous_month
 from odoo.addons.l10n_br_sped_base.models.sped_mixin import LAYOUT_VERSIONS
 
 
@@ -401,6 +402,10 @@ class Registro0000(models.Model):
     _name = "l10n_br_sped.efd_pis_cofins.0000"
     _inherit = ["l10n_br_sped.efd_pis_cofins.6.0000"]
     _odoo_model = "res.company"
+
+    # monthly book: the default period is the month just closed
+    DT_INI = fields.Date(default=lambda self: previous_month(self.env)[0])
+    DT_FIN = fields.Date(default=lambda self: previous_month(self.env)[1])
 
     # Guia Prático 1.35, Registro 0000, campo 14: valores válidos 0, 1, 2, 3,
     # 4 e 9 (a seleção gerada só trazia 0 e 1).

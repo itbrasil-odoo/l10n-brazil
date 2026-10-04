@@ -19,7 +19,10 @@ from odoo.addons.l10n_br_fiscal.constants.fiscal import (
     DOCUMENT_ISSUER_COMPANY,
     FISCAL_IN,
 )
-from odoo.addons.l10n_br_sped_base.models.sped_declaration import period_bounds_utc
+from odoo.addons.l10n_br_sped_base.models.sped_declaration import (
+    period_bounds_utc,
+    previous_month,
+)
 from odoo.addons.l10n_br_sped_base.models.sped_mixin import (
     EDITABLE_ON_DRAFT,
     LAYOUT_VERSIONS,
@@ -531,6 +534,10 @@ class Registro0000(models.Model):
     _inherit = ["l10n_br_sped.efd_icms_ipi.20.0000"]
     _odoo_model = "res.company"
 
+    # monthly book: the default period is the month just closed
+    DT_INI = fields.Date(default=lambda self: previous_month(self.env)[0])
+    DT_FIN = fields.Date(default=lambda self: previous_month(self.env)[1])
+
     COD_FIN = fields.Selection(
         [
             ("0", "Remessa do arquivo original"),
@@ -572,7 +579,8 @@ class Registro0000(models.Model):
     # included (1206 = ICMS comércio, 2204 = ICMS-ST comércio, tabela 17254).
     cod_receita = fields.Char(
         string="Código Receita",
-        help="Código de receita do ICMS próprio (E116), da tabela da UF.",
+        help="Código de receita do ICMS próprio (E116), da tabela da UF. "
+        "Vazio usa a tabela Códigos de receita e vencimentos da empresa.",
     )
     cod_receita_st = fields.Char(
         string="Código Receita ICMS-ST",
@@ -644,9 +652,9 @@ class Registro0000(models.Model):
         group.append(
             E.field(name="cod_obrigacao", required="1", readonly=EDITABLE_ON_DRAFT)
         )
-        group.append(
-            E.field(name="cod_receita", required="1", readonly=EDITABLE_ON_DRAFT)
-        )
+        # not required: empty uses the company's table (Códigos de receita e
+        # vencimentos), which is how it is meant to be filled month after month
+        group.append(E.field(name="cod_receita", readonly=EDITABLE_ON_DRAFT))
         group.append(E.field(name="dt_vcto_obrigacao", readonly=EDITABLE_ON_DRAFT))
         group.append(E.field(name="cod_receita_st", readonly=EDITABLE_ON_DRAFT))
         group.append(E.field(name="dt_vcto_obrigacao_st", readonly=EDITABLE_ON_DRAFT))
