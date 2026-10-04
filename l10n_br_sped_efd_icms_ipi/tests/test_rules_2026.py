@@ -305,7 +305,8 @@ class TestRules2026(Rules2026Common):
         model = self.env["l10n_br_sped.efd_icms_ipi.c190"]
         field = model._fields["VL_OPR"]
         self.assertEqual(model._format_field_value(field, 1234.5), "1234,50")
-        self.assertEqual(model._format_field_value(field, 1234.0), "1234")
+        # an amount always carries two decimals (l10n_br_sped_base, OCA 30795a3ace)
+        self.assertEqual(model._format_field_value(field, 1234.0), "1234,00")
         self.assertEqual(model._format_field_value(field, 0.0), "0")
 
 
