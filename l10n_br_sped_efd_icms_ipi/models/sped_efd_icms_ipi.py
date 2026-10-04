@@ -248,7 +248,7 @@ def icms_document_totals(env, declaration):
             elif exit_side:
                 totals["debit"] += line.icms_value
             else:
-                totals["credit"] += line.icms_value
+                totals["credit"] += icms_values(line)[2]
     return totals
 
 
@@ -370,11 +370,60 @@ def activity_indicator(company):
 CSOSN_TO_CST = {"201": "60", "202": "60", "203": "60", "500": "60"}
 
 
+# Supplier CSTs that mean the ICMS-ST was charged before the entry.
+ST_CHARGED_CSTS = ("10", "30", "60", "70")
+
+
+def is_entry(line):
+    return line.document_id.fiscal_operation_type == FISCAL_IN
+
+
+def icms_creditable(line):
+    """Whether the declarant appropriates the ICMS of an entry line.
+
+    Guia Prático 3.2.4, C170: "para documentos de entrada, os campos de valor
+    de imposto, base de cálculo e alíquota só devem ser informados se o
+    adquirente tiver direito à apropriação do crédito (enfoque do
+    declarante)". Odoo decides it with the deductible taxes of the entry's
+    fiscal operation, per company: the same switch that posts the ICMS to
+    "a recuperar" or to the cost. The file and the accounting answer from one
+    place, so an entry whose ICMS went to cost is not a credit in the E110.
+    Exits are always written with their ICMS.
+    """
+    if not is_entry(line):
+        return True
+    operation = line.fiscal_operation_id or line.document_id.fiscal_operation_id
+    company = line.document_id.company_id
+    return bool(
+        operation
+        and "deductible_taxes" in operation._fields
+        and operation.with_company(company).deductible_taxes
+    )
+
+
+def icms_values(line):
+    """ICMS base, rate and amount as the declarant books them (C170/C190)."""
+    if icms_creditable(line):
+        return line.icms_base, line.icms_percent, line.icms_value
+    return 0.0, 0.0, 0.0
+
+
 def icms_cst(line):
-    """CST_ICMS of C170/C190: origin plus the two digits of Tabela B."""
+    """CST_ICMS of C170/C190: origin plus the two digits of Tabela B.
+
+    Guia Prático 3.2.4, C170 campo 10: an entry is written "sob o enfoque do
+    declarante" (exemplo 2: goods for resale with ICMS retained by ST, 60;
+    exemplo 1: taxed goods without the credit, 90), not with the supplier's
+    CST.
+    """
     code = line.icms_cst_id.code or "00"
     if len(code) == 3:  # CSOSN
         code = CSOSN_TO_CST.get(code, "90")
+    elif is_entry(line) and line.document_id.issuer != DOCUMENT_ISSUER_COMPANY:
+        if code in ST_CHARGED_CSTS or line.icmsst_value:
+            code = "60"
+        elif code in ("00", "20") and not icms_creditable(line):
+            code = "90"
     return f"{line.icms_origin or '0'}{code}"
 
 
@@ -1612,8 +1661,9 @@ class RegistroC100(models.Model):
             "VL_FRT": record.amount_freight_value,
             "VL_SEG": record.amount_insurance_value,
             "VL_OUT_DA": record.amount_other_value,
-            "VL_BC_ICMS": record.amount_icms_base,
-            "VL_ICMS": record.amount_icms_value,
+            # the sum of the C190, so an entry without credit is 0 (Guia C170)
+            "VL_BC_ICMS": sum(icms_values(line)[0] for line in record.fiscal_line_ids),
+            "VL_ICMS": sum(icms_values(line)[2] for line in record.fiscal_line_ids),
             "VL_BC_ICMS_ST": record.amount_icmsst_base,
             "VL_ICMS_ST": record.amount_icmsst_value,
             "VL_IPI": record.amount_ipi_value,
@@ -2023,9 +2073,9 @@ class RegistroC170(models.Model):
             "CST_ICMS": cst_icms,
             "CFOP": str(record.cfop_id.code),
             "COD_NAT": nature_code(record.fiscal_operation_id),
-            "VL_BC_ICMS": record.icms_base,
-            "ALIQ_ICMS": record.icms_percent,
-            "VL_ICMS": record.icms_value,
+            "VL_BC_ICMS": icms_values(record)[0],
+            "ALIQ_ICMS": icms_values(record)[1],
+            "VL_ICMS": icms_values(record)[2],
             "VL_BC_ICMS_ST": record.icmsst_base,
             "ALIQ_ST": record.icmsst_percent,
             "VL_ICMS_ST": record.icmsst_value,
@@ -2365,7 +2415,7 @@ class RegistroC190(models.Model):
         # grouping is done here and handed to the base as a VALUES query.
         groups = {}
         for line in parent_record.fiscal_line_ids:
-            key = (icms_cst(line), line.cfop_id.code or "", line.icms_percent or 0.0)
+            key = (icms_cst(line), line.cfop_id.code or "", icms_values(line)[1] or 0.0)
             groups.setdefault(key, []).append(line.id)
         rows = [(cst, cfop, aliq, ids) for (cst, cfop, aliq), ids in groups.items()]
         return values_query(sorted(rows), ("cst_icms", "cfop", "aliq_icms", "line_ids"))
@@ -2412,8 +2462,8 @@ class RegistroC190(models.Model):
             "CFOP": record.get("cfop") or "",
             "ALIQ_ICMS": float(record.get("aliq_icms") or 0.0),
             "VL_OPR": self._vl_opr(record["line_ids"]),
-            "VL_BC_ICMS": sum(lines.mapped("icms_base")),
-            "VL_ICMS": sum(lines.mapped("icms_value")),
+            "VL_BC_ICMS": sum(icms_values(line)[0] for line in lines),
+            "VL_ICMS": sum(icms_values(line)[2] for line in lines),
             "VL_BC_ICMS_ST": sum(lines.mapped("icmsst_base")),
             "VL_ICMS_ST": sum(lines.mapped("icmsst_value")),
             "VL_RED_BC": self._vl_red_bc(record, lines),
