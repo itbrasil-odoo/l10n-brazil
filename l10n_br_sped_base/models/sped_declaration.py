@@ -4,15 +4,52 @@
 import base64
 import logging
 from collections import defaultdict
+from datetime import datetime, time, timedelta
 from io import StringIO
 
+import pytz
 from lxml.builder import E
+from markupsafe import Markup
 
 from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 from .sped_mixin import LAYOUT_VERSIONS, SPED_ENCODING
 
 _logger = logging.getLogger(__name__)
+
+# The fiscal period is a range of CALENDAR days in Brazil; the documents store
+# their date as a UTC datetime.
+DEFAULT_TZ = "America/Sao_Paulo"
+
+
+def period_bounds_utc(env, date_from, date_to):
+    """UTC datetimes [start, end) covering local days date_from..date_to.
+
+    `document_date` is a Datetime: comparing it to the period dates takes
+    them as midnight UTC, which drops every document of the last day (and of
+    the last evening of the month, already the next day in UTC) and pulls in
+    the previous month's last evening.
+    """
+    tz = pytz.timezone(env.user.tz or DEFAULT_TZ)
+    start = tz.localize(datetime.combine(date_from, time.min))
+    end = tz.localize(datetime.combine(date_to + timedelta(days=1), time.min))
+    return (
+        start.astimezone(pytz.utc).replace(tzinfo=None),
+        end.astimezone(pytz.utc).replace(tzinfo=None),
+    )
+
+
+def previous_month(env):
+    """First and last day of the month before today (user's timezone).
+
+    The monthly tax books (EFD ICMS/IPI, EFD-Contribuições) are filed for the
+    month just closed, so that is the useful default; the base default (a
+    year back to a year ahead) only suits an annual book like the ECD.
+    """
+    first = fields.Date.context_today(env["res.users"]).replace(day=1)
+    last = first - timedelta(days=1)
+    return last.replace(day=1), last
 
 
 class SpedDeclaration(models.AbstractModel):
@@ -58,6 +95,15 @@ class SpedDeclaration(models.AbstractModel):
     )
 
     split_sped_by_bloco = fields.Boolean()
+
+    pull_error = fields.Text(
+        string="Pull errors",
+        readonly=True,
+        copy=False,
+        help="Registers whose pull from Odoo failed in the last 'Pull Registers "
+        "from Odoo'. While there is any, the SPED file is not generated: the "
+        "register would simply be missing from a file that still looks valid.",
+    )
 
     debug = fields.Boolean(
         help=(
@@ -146,6 +192,7 @@ class SpedDeclaration(models.AbstractModel):
                     [], order="id DESC", limit=100
                 )
             else:
+                start, end = period_bounds_utc(self.env, record.DT_INI, record.DT_FIN)
                 fiscal_document_ids = self.env["l10n_br_fiscal.document"].search(
                     [
                         ("company_id", "=", record.company_id.id),
@@ -154,8 +201,8 @@ class SpedDeclaration(models.AbstractModel):
                             "in",
                             ("autorizada", "cancelada", "denegada", "inutilizada"),
                         ),
-                        ("document_date", ">=", record.DT_INI),
-                        ("document_date", "<=", record.DT_FIN),
+                        ("document_date", ">=", start),
+                        ("document_date", "<", end),
                     ]
                 )
 
@@ -181,13 +228,51 @@ class SpedDeclaration(models.AbstractModel):
             # TODO: Complementar com unidades de medidas de outros blocos!!!
             record.fiscal_uom_ids = record.fiscal_document_line_ids.mapped("uom_id")
 
+    def _sped_companies(self):
+        """Companies whose documents the declaration reads."""
+        return self.company_id
+
+    def _with_sped_companies(self):
+        """The declaration read across its own companies.
+
+        Odoo's multi-company rules only show the documents of the companies
+        selected in the switcher. A declaration for another company (or, in the
+        EFD-Contribuições, the branches of the legal entity) silently came out
+        empty or partial. The user must have access to those companies; the
+        switcher selection no longer matters.
+        """
+        self.ensure_one()
+        if self.env.su:
+            return self
+        # read without the access rules: a company the user cannot see would
+        # otherwise just drop out of the list, and the file come out partial
+        companies = self.sudo()._sped_companies()
+        missing = companies - self.env.user.sudo().company_ids
+        if missing:
+            raise UserError(
+                _(
+                    "Você não tem acesso a estas empresas da declaração: "
+                    "%(names)s. Peça o acesso ou retire-as da declaração.",
+                    names=", ".join(missing.mapped("name")),
+                )
+            )
+        return self.with_context(allowed_company_ids=companies.ids)
+
     def button_populate_sped_from_odoo(self):
         """Populate SPED registers from Odoo."""
+        self.ensure_one()
+        return self._with_sped_companies()._populate_sped_from_odoo()
+
+    def _populate_sped_from_odoo(self):
         # TODO add cron pulling from Odoo for open declarations
         self.ensure_one()
         log_msg = StringIO()
         log_msg.write(f"<h3>{_('Pulled from Odoo')}</h3>")
         kind = self._get_kind()
+        # Pulling again must replace, not add: without this a second click
+        # duplicated every register (two E110, every C100 twice) and the file
+        # came out wrong unless someone remembered to flush first.
+        self.env["l10n_br_sped.mixin"]._flush_registers(kind, self.id)
         mixin_env = self.env["l10n_br_sped.mixin"].with_context(
             company_id=self.company_id.id,
             declaration=self,
@@ -212,6 +297,7 @@ class SpedDeclaration(models.AbstractModel):
                     f"<p>0000: {self._odoo_model} → {origem.display_name}</p>"
                 )
 
+        errors = []
         for register_model in top_registers:  # Iterate over models, not instances
             try:
                 with self.env.cr.savepoint():
@@ -227,13 +313,20 @@ class SpedDeclaration(models.AbstractModel):
                     "<p style='color:red;'>Error "
                     f"processing {register_model._name}: {e}</p>"
                 )
-        self.message_post(body=log_msg.getvalue())
+                errors.append(f"{register_model._name}: {e}")
+        # A register whose pull failed is simply ABSENT from the file, and the
+        # structural validator cannot tell an absent register from one that
+        # has no data (a lost 0140 still makes a well-formed file). So the
+        # failure is kept on the declaration and blocks the file generation.
+        self.pull_error = "\n".join(errors) or False
+        # the log is HTML built here; posted as text it showed the raw tags
+        self.message_post(body=Markup(log_msg.getvalue()))
 
     def button_flush_registers(self):
         self.ensure_one()
         self.env["l10n_br_sped.mixin"]._flush_registers(self._get_kind(), self.id)
         self.message_post(
-            body=f"<h3>{_('Flushed all Registers from Declaration!')}</h3>"
+            body=Markup("<h3>%s</h3>") % _("Flushed all Registers from Declaration!")
         )
 
     def button_done(self):
@@ -245,6 +338,19 @@ class SpedDeclaration(models.AbstractModel):
     def button_create_sped_files(self):
         """Generate and attach the SPED file."""
         self.ensure_one()
+        return self._with_sped_companies()._create_sped_files()
+
+    def _create_sped_files(self):
+        self.ensure_one()
+        if self.pull_error:
+            raise UserError(
+                _(
+                    "The last pull from Odoo failed for these registers, which "
+                    "would be missing from the file. Fix the cause and pull "
+                    "again before generating the SPED file:\n%s"
+                )
+                % self.pull_error
+            )
         sped_txt = self._generate_sped_text()
 
         if self.split_sped_by_bloco:
@@ -276,7 +382,21 @@ class SpedDeclaration(models.AbstractModel):
 
         return attachments_vals
 
+    @api.model
+    def _sped_file_text(self, text):
+        """Text of the file with CR+LF at the end of EVERY line, the last one too.
+
+        Every SPED layout asks for it (EFD-Contribuições Guia Prático 1.35,
+        Seção 1, item g: "Todos os registros devem conter no final de cada
+        linha ... os caracteres CR e LF"; same rule in the EFD ICMS/IPI and the
+        ECD). Without the terminator on the last line the PGE refuses the
+        import (MSG_QUEBRA_ULTIMA_LINHA_INVALIDA).
+        """
+        lines = text.replace("\r\n", "\n").strip("\n").split("\n")
+        return "\r\n".join(lines) + "\r\n"
+
     def _create_sped_attachment(self, text, bloco=None):
+        text = self._sped_file_text(text)
         kind = self._get_kind()
         if bloco:
             file_name = f"{kind.upper()}-bloco_{bloco}-{self.display_name}.txt"
@@ -392,6 +512,17 @@ class SpedDeclaration(models.AbstractModel):
         group.append(E.field(name="debug"))
         group.append(E.separator(colspan="4"))
 
+    def _skip_empty_blocks(self):
+        """O bloco sem nenhum registro entra no arquivo, ou e omitido?
+
+        A ECD escritura o bloco vazio com o indicador "1" (bloco sem dados);
+        a ECF nao aceita: o PVA recusa o arquivo com "Organizacao hierarquica
+        dos blocos/registros do arquivo esta fora dos padroes estabelecidos"
+        e aponta como esperado o primeiro registro do proximo bloco com dados.
+        Cada escrituracao responde por si.
+        """
+        return False
+
     def _generate_sped_text(self, version=None):
         """Generate SPED text from Odoo declaration records."""
         self.ensure_one()
@@ -400,49 +531,50 @@ class SpedDeclaration(models.AbstractModel):
             version = LAYOUT_VERSIONS[kind]
         top_register_classes = self._get_top_registers(kind)
         sped = StringIO()
-        last_bloco = None
         line_total = 0
         # mutable register line_count https://stackoverflow.com/a/15148557
         line_count = [0]
         count_by_register = defaultdict(int)
-        count_by_bloco = defaultdict(int)
         self._generate_register_text(sped, version, line_count, count_by_register)
-        count_by_register["0990"] = 1  # for some reason it is needed
+
+        # agrupa os registros de topo por bloco, preservando a ordem
+        blocos = []
+        for register_class in top_register_classes:
+            bloco = register_class._name[-4:][0].upper()
+            if not blocos or blocos[-1][0] != bloco:
+                blocos.append((bloco, []))
+            blocos[-1][1].append(register_class)
 
         domain = [("declaration_id", "=", self.id)]
-        for register_class in top_register_classes:
-            bloco = register_class._name[-4:][0].upper()
-            # Contar com o dominio da declaracao, e nao `[]`: sem ele o
-            # indicador de movimento do bloco enxerga os registros de TODAS as
-            # escrituracoes da base e abre como "com dados" um bloco que nesta
-            # declaracao esta vazio. O PVA recusa a importacao com "registro de
-            # abertura do bloco informa que o bloco tem movimento, no entanto
-            # nenhum registro foi informado no bloco".
-            count_by_bloco[bloco] += register_class.search_count(domain)
-        for register_class in top_register_classes:
-            bloco = register_class._name[-4:][0].upper()
-            registers = register_class.search(domain)
-            if bloco != last_bloco:
-                if last_bloco:
-                    sped.write(f"\n|{last_bloco}990|{line_count[0] + 1}|")
-                    count_by_register[f"{bloco}990"] = 1
-                    line_total += line_count[0] + 1
-                    line_count = [0]
+        pular_vazios = self._skip_empty_blocks()
+        primeiro = True
+        for bloco, register_classes in blocos:
+            # a busca leva o dominio da declaracao: o indicador de
+            # movimento do bloco enxerga so ESTA escrituracao (sem o
+            # dominio, registros de outras declaracoes da base abririam
+            # como "com dados" um bloco vazio aqui, e o PVA recusa a
+            # importacao)
+            registros = [
+                register_class.search(domain) for register_class in register_classes
+            ]
+            tem_dados = any(registros)
+            if pular_vazios and not tem_dados and bloco != "0":
+                continue
+            if not primeiro:
+                line_count = [0]
+            sped.write(f"\n|{bloco}001|{0 if tem_dados else 1}|")
+            count_by_register[f"{bloco}001"] = 1
+            line_count[0] += 1
+            for registro in registros:
+                registro._generate_register_text(
+                    sped, version, line_count, count_by_register
+                )
+            sped.write(f"\n|{bloco}990|{line_count[0] + 1}|")
+            count_by_register[f"{bloco}990"] = 1
+            line_total += line_count[0] + 1
+            primeiro = False
 
-                sped.write(f"\n|{bloco}001|{0 if count_by_bloco[bloco] > 0 else 1}|")
-                count_by_register[f"{bloco}001"] = 1
-                line_count[0] += 1
-            registers._generate_register_text(
-                sped, version, line_count, count_by_register
-            )
-            last_bloco = bloco
-
-        # close the last register:
-        # closing_register = "099" if kind == "ecf" else "990"
-        # sped.write(f"\n|{bloco}{closing_register}|{line_count[0] + 1}|")
-        sped.write(f"\n|{bloco}990|{line_count[0] + 1}|")
-
-        # totals:
+        # totais:
         sped.write("\n|9001|0|")
         count_by_register["9001"] = 1
         count_by_register["9990"] = 1
@@ -455,8 +587,9 @@ class SpedDeclaration(models.AbstractModel):
             code = item[0]
             num = item[1]
             sped.write(f"\n|9900|{code}|{num}|")
-        sped.write(f"\n|9990|{len(count_by_register.keys()) + 3}|")
+        linhas_bloco_9 = len(count_by_register.keys()) + 3
+        sped.write(f"\n|9990|{linhas_bloco_9}|")
 
-        line_total += line_count[0] + len(count_by_register.keys()) + 4
+        line_total += linhas_bloco_9
         sped.write(f"\n|9999|{line_total}|")
         return sped.getvalue()
