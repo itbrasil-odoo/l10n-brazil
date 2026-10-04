@@ -10,6 +10,7 @@ from datetime import datetime, time
 
 import pytz
 from erpbrasil.base import misc
+from lxml.builder import E
 
 from odoo import api, fields, models
 
@@ -18,7 +19,10 @@ from odoo.addons.l10n_br_fiscal.constants.fiscal import (
     FISCAL_IN,
 )
 from odoo.addons.l10n_br_sped_base.models.sped_declaration import previous_month
-from odoo.addons.l10n_br_sped_base.models.sped_mixin import LAYOUT_VERSIONS
+from odoo.addons.l10n_br_sped_base.models.sped_mixin import (
+    EDITABLE_ON_DRAFT,
+    LAYOUT_VERSIONS,
+)
 
 
 def _spec(record, spec_field, default=None):
@@ -454,6 +458,25 @@ class Registro0000(models.Model):
         "padrão entram a empresa da declaração e as suas filiais; retire a "
         "filial que não deve ser escriturada (uma loja de teste, por exemplo).",
     )
+
+    @api.model
+    def _append_top_view_elements(self, group, inline=False):
+        """Regime and establishments where the user can check them.
+
+        Both have defaults (the company's profit regime, the company and its
+        branches) but the user has to see them: a test store must be taken out
+        of the establishments, and a regime change is a decision to review.
+        """
+        res = super()._append_top_view_elements(group)
+        group.append(E.field(name="cod_inc_trib", readonly=EDITABLE_ON_DRAFT))
+        group.append(
+            E.field(
+                name="establishment_ids",
+                widget="many2many_tags",
+                readonly=EDITABLE_ON_DRAFT,
+            )
+        )
+        return res
 
     @api.depends("company_id")
     def _compute_cod_inc_trib(self):
