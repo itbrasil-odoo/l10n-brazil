@@ -17,7 +17,6 @@
     hides any regression in the bridge between the tax engine and the assessment.
 -->
 <odoo>
-
     <!--
         Input tax is only recoverable when the fiscal operation says so.
         Otherwise the engine picks the "no credit" variant of each tax and the
@@ -106,5 +105,4 @@
             eval="[ref('demo_in_invoice_insumo'), ref('demo_out_invoice_producao')]"
         />
     </function>
-
 </odoo>

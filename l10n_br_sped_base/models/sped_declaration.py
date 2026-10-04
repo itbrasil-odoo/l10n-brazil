@@ -9,7 +9,6 @@ from io import StringIO
 
 import pytz
 from lxml.builder import E
-
 from markupsafe import Markup
 
 from odoo import _, api, fields, models
@@ -41,7 +40,6 @@ def period_bounds_utc(env, date_from, date_to):
     )
 
 
-
 def previous_month(env):
     """First and last day of the month before today (user's timezone).
 
@@ -52,6 +50,7 @@ def previous_month(env):
     first = fields.Date.context_today(env["res.users"]).replace(day=1)
     last = first - timedelta(days=1)
     return last.replace(day=1), last
+
 
 class SpedDeclaration(models.AbstractModel):
     _name = "l10n_br_sped.declaration"

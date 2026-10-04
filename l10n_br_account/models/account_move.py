@@ -204,7 +204,7 @@ class AccountMove(models.Model):
         """
         for move in self:
             lines = move.invoice_line_ids.filtered(
-                lambda line: (
+                lambda line, move=move: (
                     line.display_type == "product"
                     and line.proxy_partner_id != move.commercial_partner_id
                 )

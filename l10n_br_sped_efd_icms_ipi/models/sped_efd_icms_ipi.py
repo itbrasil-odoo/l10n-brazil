@@ -197,9 +197,9 @@ def st_by_uf(env, declaration):
 
 def st_assessment(bucket):
     """E210 fields 03..15 from the period totals of one UF."""
-    credits = bucket["return"] + bucket["refund"] + bucket["other"]
+    total_credits = bucket["return"] + bucket["refund"] + bucket["other"]
     debit = bucket["retention"]
-    balance = debit - credits
+    balance = debit - total_credits
     return {
         "VL_SLD_CRED_ANT_ST": 0.0,
         "VL_DEVOL_ST": bucket["return"],

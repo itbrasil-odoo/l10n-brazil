@@ -67,7 +67,7 @@ class TestTaxAssessment(AccountTestInvoicingCommon):
     def _regime_group(self, regime):
         """One tax group per regime: the partition criterion of decision D1."""
         return self.env["account.tax.group"].create(
-            {"name": "PIS %s (teste)" % regime, "regime": regime}
+            {"name": f"PIS {regime} (teste)", "regime": regime}
         )
 
     def _add_line(self, assessment, kind, tax_amount, source="manual", code=None):
@@ -851,7 +851,7 @@ class TestTaxAssessmentClosingBook(AccountTestInvoicingCommon):
     def _tax(cls, name, type_tax_use, account):
         return cls.env["account.tax"].create(
             {
-                "name": "%s (teste)" % name,
+                "name": f"{name} (teste)",
                 "amount": 18.0,
                 "type_tax_use": type_tax_use,
                 "tax_group_id": cls.group.id,

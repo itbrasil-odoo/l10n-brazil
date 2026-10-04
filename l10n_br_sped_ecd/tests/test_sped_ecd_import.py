@@ -5,9 +5,8 @@ from os import path
 
 from odoo.tests import common
 
-from odoo.addons.l10n_br_sped_base.models.sped_mixin import SPED_ENCODING
-
 from odoo.addons import l10n_br_sped_ecd
+from odoo.addons.l10n_br_sped_base.models.sped_mixin import SPED_ENCODING
 
 
 class SpedTest(common.TransactionCase):

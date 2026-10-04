@@ -22,4 +22,3 @@ class TestPeriodBounds(common.TransactionCase):
         self.env.user.tz = False
         start, _end = period_bounds_utc(self.env, date(2026, 9, 1), date(2026, 9, 30))
         self.assertEqual(start, datetime(2026, 9, 1, 3, 0))
-

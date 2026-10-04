@@ -32,7 +32,9 @@
                 </header>
                 <sheet>
                     <div class="oe_title">
-                        <h1><field name="name" readonly="1" /></h1>
+                        <h1>
+                            <field name="name" readonly="1" />
+                        </h1>
                     </div>
                     <group>
                         <group>
@@ -41,10 +43,7 @@
                                 groups="base.group_multi_company"
                                 readonly="state != 'draft'"
                             />
-                            <field
-                                name="tax_group_id"
-                                readonly="state != 'draft'"
-                            />
+                            <field name="tax_group_id" readonly="state != 'draft'" />
                             <field
                                 name="branch_company_ids"
                                 widget="many2many_tags"

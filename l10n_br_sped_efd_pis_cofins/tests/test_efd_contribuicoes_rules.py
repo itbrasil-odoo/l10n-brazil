@@ -660,7 +660,9 @@ class TestDeclarationCompanies(TransactionCase):
             self.env["l10n_br_sped.efd_pis_cofins.0000"]
             .with_user(user)
             .with_context(allowed_company_ids=[main.id])
-            .create({"company_id": main.id, "DT_INI": "2026-09-01", "DT_FIN": "2026-09-30"})
+            .create(
+                {"company_id": main.id, "DT_INI": "2026-09-01", "DT_FIN": "2026-09-30"}
+            )
         )
         self.assertIn(branch, declaration.establishment_ids)
         scoped = declaration._with_sped_companies()

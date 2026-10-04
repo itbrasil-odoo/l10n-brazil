@@ -110,7 +110,11 @@ class TestBlocoE(common.TransactionCase):
             declaration=self.declaration,
             default_declaration_id=self.declaration.id,
         )
-        documents = documents or {"debit": 1000.0, "credit": 400.0, "extemporaneous": 0.0}
+        documents = documents or {
+            "debit": 1000.0,
+            "credit": 400.0,
+            "extemporaneous": 0.0,
+        }
         with patch(DOCUMENTS, return_value=documents):
             model._pull_records_from_odoo("efd_icms_ipi", 2, log_msg=StringIO())
         return self.env["l10n_br_sped.efd_icms_ipi.e100"].search(
@@ -220,7 +224,7 @@ class TestBlocoE(common.TransactionCase):
             self.assessment.state = state
             self.assertFalse(
                 self._pull_bloco_e().reg_E110_ids,
-                "apuração %s não pode entrar no arquivo" % state,
+                f"apuração {state} não pode entrar no arquivo",
             )
             self.env["l10n_br_sped.efd_icms_ipi.e100"].search(
                 [("declaration_id", "=", self.declaration.id)]

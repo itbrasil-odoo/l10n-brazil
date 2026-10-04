@@ -139,7 +139,7 @@ class TestAssessmentFromFiscalInvoice(AccountMoveBRCommon):
                     and ml.tax_line_id.tax_group_id == g
                 )
                 if not booked_lines:
-                    self.skipTest("%s not applied by this operation" % group.name)
+                    self.skipTest(f"{group.name} not applied by this operation")
                 booked = sum(booked_lines.mapped("credit")) - sum(
                     booked_lines.mapped("debit")
                 )
@@ -152,7 +152,7 @@ class TestAssessmentFromFiscalInvoice(AccountMoveBRCommon):
 
         This is the case that cancelled itself out. A deductible input posts a
         pair: the tax debits the recoverable account and its "Dedutivel"
-        counterpart credits the cost by the same amount, so the tax leaves the
+        counterpart credit_lines the cost by the same amount, so the tax leaves the
         cost of the goods. Both belong to the assessed group and both are of
         type purchase, so reading both sums a value and its negative and the
         credit vanishes, leaving an assessment that says a period full of
@@ -176,11 +176,11 @@ class TestAssessmentFromFiscalInvoice(AccountMoveBRCommon):
         assessment.action_compute()
 
         self.assertAlmostEqual(assessment.credit_total, booked, places=2)
-        credits = assessment.line_ids.filtered(
+        credit_lines = assessment.line_ids.filtered(
             lambda li: li.source == "computed" and li.kind == "credit"
         )
         self.assertTrue(
-            credits, "the creditable purchase produced no credit line at all"
+            credit_lines, "the creditable purchase produced no credit line at all"
         )
 
     def test_deductible_counterpart_is_not_assessed_twice(self):

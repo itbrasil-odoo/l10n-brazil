@@ -119,7 +119,6 @@ Authors
 -------
 
 * Akretion
-* KMEE
 
 Contributors
 ------------

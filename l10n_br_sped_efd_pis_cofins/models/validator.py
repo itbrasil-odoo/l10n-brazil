@@ -33,7 +33,7 @@ class EfdContribuicoesValidator(SpedValidator):
         super().__init__(text, registers, kind=kind)
 
     def _validate_blocks(self, structure):
-        super()._validate_blocks(structure)
+        res = super()._validate_blocks(structure)
         codes = {code for _number, code, _fields in structure}
         if "P001" in codes:
             self._error(0, "P001", "block P is forbidden since 2025 (NT 09/2024)")
@@ -44,6 +44,7 @@ class EfdContribuicoesValidator(SpedValidator):
                 self._error(0, opening, f"the opening of block {block} is missing")
             if closing not in codes:
                 self._error(0, closing, f"the closing of block {block} is missing")
+        return res
 
     def _validate_fields(self, structure):
         if not self.registers:

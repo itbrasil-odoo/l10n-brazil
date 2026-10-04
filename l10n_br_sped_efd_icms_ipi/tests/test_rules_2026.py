@@ -728,9 +728,7 @@ class TestPvaRules(Rules2026Common):
 
     def test_activity_indicator_follows_the_cnae(self):
         """Comércio (CNAE 4530) não é industrial; indústria (2211) é."""
-        from odoo.addons.l10n_br_sped_efd_icms_ipi.models.sped_efd_icms_ipi import (
-            activity_indicator,
-        )
+        from ..models.sped_efd_icms_ipi import activity_indicator
 
         Cnae = self.env["l10n_br_fiscal.cnae"]
         partner = self.company.partner_id

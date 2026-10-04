@@ -119,12 +119,16 @@
       those numbers instead of leaving them under "not applicable".
     -->
     <function model="account.tax.group" name="write">
-        <value eval="[ref('l10n_br_coa.%s_tax_group_pis' % ref('l10n_br_base.empresa_lucro_presumido'))]" />
+        <value
+            eval="[ref('l10n_br_coa.%s_tax_group_pis' % ref('l10n_br_base.empresa_lucro_presumido'))]"
+        />
         <value eval="{'regime': 'cumulative'}" />
     </function>
 
     <function model="account.tax.group" name="write">
-        <value eval="[ref('l10n_br_coa.%s_tax_group_cofins' % ref('l10n_br_base.empresa_lucro_presumido'))]" />
+        <value
+            eval="[ref('l10n_br_coa.%s_tax_group_cofins' % ref('l10n_br_base.empresa_lucro_presumido'))]"
+        />
         <value eval="{'regime': 'cumulative'}" />
     </function>
 
