@@ -4,6 +4,7 @@
 
 from datetime import date, datetime
 
+from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
 from ..models.sped_efd_pis_cofins import _cod_mod
@@ -633,3 +634,38 @@ class TestEfdContribuicoesRules(TransactionCase):
         self.assertEqual((c120.COD_DOC_IMP, c120.NUM_DOC_IMP), ("2", "26BR00000000001"))
         self.assertAlmostEqual(c120.VL_PIS_IMP, 3.3)
         self.assertAlmostEqual(c120.VL_COFINS_IMP, 15.2)
+
+
+@tagged("post_install", "-at_install")
+class TestDeclarationCompanies(TransactionCase):
+    """A declaração lê os documentos das empresas dela, não do seletor."""
+
+    def test_switcher_does_not_limit_the_establishments(self):
+        Company = self.env["res.company"]
+        main = self.env.company
+        branch = Company.create({"name": "Filial ficticia SPED", "parent_id": main.id})
+        user = self.env["res.users"].create(
+            {
+                "name": "Fiscal ficticio",
+                "login": "fiscal.ficticio.sped",
+                "company_id": main.id,
+                "company_ids": [(6, 0, (main | branch).ids)],
+                "groups_id": [
+                    (4, self.env.ref("base.group_user").id),
+                    (4, self.env.ref("l10n_br_fiscal.group_manager").id),
+                ],
+            }
+        )
+        declaration = (
+            self.env["l10n_br_sped.efd_pis_cofins.0000"]
+            .with_user(user)
+            .with_context(allowed_company_ids=[main.id])
+            .create({"company_id": main.id, "DT_INI": "2026-09-01", "DT_FIN": "2026-09-30"})
+        )
+        self.assertIn(branch, declaration.establishment_ids)
+        scoped = declaration._with_sped_companies()
+        self.assertEqual(set(scoped.env.companies.ids), {main.id, branch.id})
+        # sem acesso a uma filial, erro claro em vez de arquivo parcial
+        user.company_ids = [(6, 0, main.ids)]
+        with self.assertRaises(UserError):
+            declaration.with_user(user)._with_sped_companies()
