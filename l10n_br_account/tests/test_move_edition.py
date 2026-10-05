@@ -349,6 +349,14 @@ class TestMoveEdition(TransactionCase):
             aml.fiscal_document_line_id.uot_id, self.env.ref("uom.product_uom_unit")
         )
 
+        self.assertTrue(move.tax_totals, "tax_totals must not be empty.")
+        self.assertAlmostEqual(
+            move.tax_totals["total_amount_currency"],
+            move.amount_total,
+            places=2,
+            msg="tax_totals widget total should match the invoice amount_total.",
+        )
+
         move.action_post()
         self.assertEqual(move.state, "posted")
         move.button_cancel()
@@ -763,6 +771,108 @@ class TestMoveEdition(TransactionCase):
         move_form.fiscal_operation_id = self.env.ref("l10n_br_fiscal.fo_venda")
         return move_form
 
+    def test_lines_added_after_first_save_book_fiscal_amounts(self):
+        self._setup_fiscal_user()
+        partner = self.env.ref("l10n_br_base.res_partner_cliente1_sp")
+        move = self._create_fiscal_invoice_form(partner).save()
+
+        move.write(
+            {
+                "invoice_line_ids": [
+                    Command.create(
+                        {
+                            "product_id": self.product_id.id,
+                            "quantity": 2.0,
+                            "price_unit": 1000.0,
+                            "fiscal_operation_id": move.fiscal_operation_id.id,
+                            "fiscal_operation_line_id": self.env.ref(
+                                "l10n_br_fiscal.fo_venda_venda"
+                            ).id,
+                        }
+                    )
+                ],
+            }
+        )
+
+        product_line = move.line_ids.filtered(
+            lambda line: line.display_type == "product"
+        )
+        term_lines = move.line_ids.filtered(
+            lambda line: line.display_type == "payment_term"
+        )
+        self.assertTrue(product_line.tax_ids)
+        expected_product = move.direction_sign * (
+            product_line.fiscal_amount_total
+            - product_line.amount_tax_included
+            - product_line.amount_tax_not_included
+        )
+        self.assertAlmostEqual(product_line.balance, expected_product, places=2)
+        self.assertAlmostEqual(
+            sum(term_lines.mapped("balance")),
+            -move.direction_sign * move.amount_total,
+            places=2,
+        )
+        self.assertAlmostEqual(move.amount_residual, move.amount_total, places=2)
+
+    def test_line_added_after_first_save_keeps_balance(self):
+        """A fiscal invoice saved header first and lines later must balance,
+        even though the web client sends its own tax_totals along."""
+        self._setup_fiscal_user()
+        partner = self.env.ref("l10n_br_base.res_partner_cliente1_sp")
+        move = self._create_fiscal_invoice_form(partner).save()
+        self.assertFalse(move.invoice_line_ids)
+
+        move.write(
+            {
+                "invoice_line_ids": [
+                    Command.create(
+                        {
+                            "product_id": self.product_id.id,
+                            "quantity": 1.0,
+                            "price_unit": 100.0,
+                            "fiscal_operation_id": move.fiscal_operation_id.id,
+                            "fiscal_operation_line_id": self.env.ref(
+                                "l10n_br_fiscal.fo_venda_venda"
+                            ).id,
+                        }
+                    )
+                ],
+            }
+        )
+        tax_lines = move.line_ids.filtered(lambda line: line.display_type == "tax")
+        self.assertTrue(tax_lines)
+        tax_amounts = {line.id: line.amount_currency for line in tax_lines}
+
+        move.write(
+            {
+                "tax_totals": {
+                    "subtotals": [
+                        {
+                            "tax_groups": [
+                                {
+                                    "id": line.tax_group_id.id,
+                                    "tax_amount_currency": abs(line.amount_currency)
+                                    + 100.0,
+                                }
+                                for line in tax_lines
+                            ]
+                        }
+                    ],
+                    "base_amount_currency": move.amount_untaxed,
+                    "tax_amount_currency": move.amount_tax + 100.0,
+                    "total_amount_currency": move.amount_total + 100.0,
+                },
+            }
+        )
+
+        self.assertAlmostEqual(
+            sum(move.line_ids.mapped("debit")),
+            sum(move.line_ids.mapped("credit")),
+            places=2,
+        )
+        for line in tax_lines:
+            self.assertEqual(line.amount_currency, tax_amounts[line.id])
+
     def test_ind_final_propagation_on_manual_change(self):
         """Changing ind_final directly on a saved invoice must propagate
         to the fiscal document lines."""
@@ -958,3 +1068,57 @@ class TestMoveEdition(TransactionCase):
         move.write({"partner_id": partner_sp.id})
         self.assertEqual(fiscal_line.partner_id, partner_sp)
         self.assertEqual(fiscal_line.cfop_id.code[:1], "5")
+
+    def test_tax_lines_follow_fiscal_change_outside_the_move(self):
+        """Fiscal amounts recomputed outside the invoice (the customer moved
+        to another state after the invoice was drafted) must reach the tax
+        lines on the next save: the native sync only recomputes them when a
+        field it tracks on the base line changes, and none did."""
+        self._setup_fiscal_user()
+        partner = self.env.ref("l10n_br_base.res_partner_cliente1_sp")
+        move = self._create_fiscal_invoice_form(partner).save()
+        move.write(
+            {
+                "invoice_line_ids": [
+                    Command.create(
+                        {
+                            "product_id": self.product_id.id,
+                            "quantity": 1.0,
+                            "price_unit": 1000.0,
+                            "fiscal_operation_id": move.fiscal_operation_id.id,
+                            "fiscal_operation_line_id": self.env.ref(
+                                "l10n_br_fiscal.fo_venda_venda"
+                            ).id,
+                        }
+                    )
+                ],
+            }
+        )
+        product_line = move.invoice_line_ids
+        cfop_before = product_line.cfop_id
+        tax_included_before = product_line.amount_tax_included
+
+        # The customer's registration is fixed after the invoice was drafted,
+        # and the fiscal line is recomputed from it, not through the invoice.
+        partner.sudo().write(
+            {"state_id": self.env.ref("base.state_br_mg").id, "l10n_br_ie_code": False}
+        )
+        move = move.with_context(check_move_validity=False)
+        move.fiscal_line_ids._compute_fiscal_tax_ids()
+        move.invoice_line_ids._onchange_fiscal_taxes()
+        self.assertNotEqual(product_line.cfop_id, cfop_before)
+        self.assertNotEqual(product_line.amount_tax_included, tax_included_before)
+
+        move.with_context(check_move_validity=True).write({"ref": "retified"})
+
+        self.assertAlmostEqual(
+            sum(move.line_ids.mapped("debit")),
+            sum(move.line_ids.mapped("credit")),
+            places=2,
+        )
+        tax_lines = move.line_ids.filtered(lambda line: line.display_type == "tax")
+        self.assertAlmostEqual(
+            abs(sum(tax_lines.mapped("balance"))),
+            product_line.amount_tax_included + product_line.amount_tax_not_included,
+            places=2,
+        )

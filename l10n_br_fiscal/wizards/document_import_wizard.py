@@ -20,6 +20,7 @@ from ..constants.fiscal import (
 _logger = logging.getLogger(__name__)
 
 try:
+    from xsdata.exceptions import ParserError
     from xsdata.formats.dataclass.parsers import XmlParser
 except ImportError:
     _logger.warning("xsdata Python lib not installed!")
@@ -37,6 +38,15 @@ class DocumentImportWizard(models.TransientModel):
     )
 
     file = fields.Binary(string="File to Import")
+
+    allow_product_creation = fields.Boolean(
+        string="Create unmapped products",
+        default=False,
+        help="If enabled, products that don't match an existing record will be"
+        " automatically created during import. If disabled (default), the"
+        " import will raise an error when an unmapped product is found so you"
+        " can map it in the product lines above before importing.",
+    )
 
     date_in_out = fields.Datetime(
         default=fields.Datetime.now,
@@ -255,5 +265,16 @@ class DocumentImportWizard(models.TransientModel):
 
     @api.model
     def _parse_file_data(self, file_data):
-        # NOTE: no try and a stacktrace does help for debug/support
-        return XmlParser().from_bytes(base64.b64decode(file_data))
+        try:
+            return XmlParser().from_bytes(base64.b64decode(file_data))
+        except ParserError as parser_error:
+            # the stacktrace still reaches the log, it does help for support
+            _logger.warning("Could not parse the imported file", exc_info=True)
+            raise UserError(
+                self.env._(
+                    "Could not read this file as the XML of an electronic fiscal"
+                    " document. Make sure you uploaded the XML itself, not its"
+                    " printed representation (PDF).\n\n%(error)s",
+                    error=parser_error,
+                )
+            ) from parser_error

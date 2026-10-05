@@ -251,6 +251,35 @@ class AccountMoveLine(models.Model):
 
         return result
 
+    def _fiscal_unsigned_amount_currency(self):
+        self.ensure_one()
+        # `deductible_taxes` is company dependent, so reading it off the
+        # operation as it comes answers for whatever company sits in the
+        # environment. The answer has to follow the company of the move:
+        # otherwise the same line takes the deductible taxes out of its
+        # base or not depending on which company the user has selected.
+        operation = self.move_id.fiscal_operation_id.with_company(self.company_id)
+        if self.cfop_id and not self.cfop_id.finance_move:
+            if operation.deductible_taxes:
+                return 0
+            # When there is no financial amount but there are non
+            # dectutible taxes, then we should take the total tax
+            # amount into account here to keep the move balanced.
+            # (In v14 that was done automatically in the payment terms)
+            return -(
+                self.amount_tax_included
+                + self.amount_tax_not_included
+                - self.amount_tax_withholding
+            )
+        amount_total = self.fiscal_amount_total + self.amount_tax_withholding
+        if operation.deductible_taxes:
+            return amount_total
+        if not self.tax_ids:
+            return self.currency_id.round(amount_total)
+        return self.currency_id.round(
+            amount_total - self.amount_tax_included - self.amount_tax_not_included
+        )
+
     @contextmanager
     def _sync_invoice(self, container):
         """
@@ -295,34 +324,7 @@ class AccountMoveLine(models.Model):
                         line.price_subtotal
                     )
                 else:  # BRAZIL CASE:
-                    if line.cfop_id and not line.cfop_id.finance_move:
-                        unsigned_amount_currency = 0
-                        if not line.move_id.fiscal_operation_id.deductible_taxes:
-                            # When there is no financial amount but there are non
-                            # dectutible taxes, then we should take the total tax
-                            # amount into account here to keep the move balanced.
-                            # (In v14 that was done automatically in the payment terms)
-                            unsigned_amount_currency = -(
-                                line.amount_tax_included
-                                + line.amount_tax_not_included
-                                - line.amount_tax_withholding
-                            )
-                    else:
-                        if line.move_id.fiscal_operation_id.deductible_taxes:
-                            unsigned_amount_currency = (
-                                line.fiscal_amount_total + line.amount_tax_withholding
-                            )
-                        else:
-                            amount_total = (
-                                line.fiscal_amount_total + line.amount_tax_withholding
-                            )
-                            unsigned_amount_currency = line.currency_id.round(
-                                amount_total
-                                - line.amount_tax_included
-                                - line.amount_tax_not_included
-                                if line.tax_ids
-                                else amount_total
-                            )
+                    unsigned_amount_currency = line._fiscal_unsigned_amount_currency()
 
                 amount_currency = unsigned_amount_currency * line.move_id.direction_sign
 
@@ -383,6 +385,7 @@ class AccountMoveLine(models.Model):
         "icms_origin",
         "ind_final",
         "icms_relief_value",
+        "icms_relief_type",
     )
     def _compute_totals(self):
         """
@@ -433,11 +436,10 @@ class AccountMoveLine(models.Model):
                 line.price_total = taxes_res["total_included"]
 
                 line.price_total += (
-                    line.insurance_value
-                    + line.other_value
-                    + line.freight_value
-                    - line.icms_relief_value
+                    line.insurance_value + line.other_value + line.freight_value
                 )
+                if line.icms_relief_type == "1":
+                    line.price_total -= line.icms_relief_value
             else:
                 # If no tax, just compute the total based on price_unit and quantity
                 subtotal = line.quantity * line_discount_price_unit
@@ -489,22 +491,7 @@ class AccountMoveLine(models.Model):
                 tax["amount"] = sign * fiscal_value * factor
                 tax["base"] = sign * (getattr(fiscal_line, field_names[1]) or 0.0)
 
-    # Ordered rules to classify an account.tax into a Brazilian tax kind
-    # from its domain/name. Each entry is (kind, include_kw, exclude_kw).
-    # Order matters: "icmsst" must be tested before "icms", etc.
-    _IMPORTED_TAX_MATCH_RULES = [
-        ("icmsst", ["icmsst", "icms_st", "icms st"], []),
-        ("icms", ["icms"], ["st", "wh", "ret"]),
-        ("ipi", ["ipi"], ["wh", "ret"]),
-        ("pis", ["pis"], ["st", "wh", "ret"]),
-        ("cofins", ["cofins"], ["st", "wh", "ret"]),
-        ("issqn", ["issqn", "iss"], ["inss", "wh", "ret"]),
-        ("ii", ["ii"], ["wh", "ret"]),
-        ("ibs", ["ibs"], ["wh", "ret"]),
-        ("cbs", ["cbs"], ["wh", "ret"]),
-    ]
-
-    # kind -> (fiscal_value_field, fiscal_base_field)
+    # tax_domain -> (fiscal_value_field, fiscal_base_field)
     _IMPORTED_TAX_FIELD_MAP = {
         "icmsst": ("icmsst_value", "icmsst_base"),
         "icms": ("icms_value", "icms_base"),
@@ -517,55 +504,32 @@ class AccountMoveLine(models.Model):
         "cbs": ("cbs_value", "cbs_base"),
     }
 
-    def _resolve_tax_kind(self, tax_dict):
-        """Resolve the Brazilian tax kind from a compute_all tax dict.
-
-        Tries the account.tax tax_domain first, then falls back to
-        heuristic name matching against ``_IMPORTED_TAX_MATCH_RULES``.
-        Returns a kind string (e.g. "icms") or "".
-        """
-        domain = ""
-        acc_tax = (
-            self.env["account.tax"].browse(tax_dict["id"])
-            if tax_dict.get("id")
-            else None
-        )
-        if not acc_tax and tax_dict.get("tax_repartition_line_id"):
-            acc_tax = (
-                self.env["account.tax.repartition.line"]
-                .browse(tax_dict["tax_repartition_line_id"])
-                .tax_id
-            )
-        if acc_tax:
-            if hasattr(acc_tax, "tax_domain") and acc_tax.tax_domain:
-                domain = acc_tax.tax_domain
-            elif hasattr(acc_tax, "fiscal_tax_ids") and acc_tax.fiscal_tax_ids:
-                domain = acc_tax.fiscal_tax_ids[0].tax_domain
-        if not domain:
-            domain = tax_dict.get("name", "").lower()
-
-        for kind, include_kw, exclude_kw in self._IMPORTED_TAX_MATCH_RULES:
-            if any(kw in domain for kw in include_kw) and not any(
-                kw in domain for kw in exclude_kw
-            ):
-                return kind
-        return ""
-
     def _override_taxes_from_import(self, taxes, fiscal_line, sign):
-        """Override compute_all tax amounts with imported fiscal values."""
+        """Override compute_all tax amounts with the imported fiscal values.
+
+        The account.tax -> Brazilian tax mapping comes from the fiscal
+        tax group (``tax_group_id.fiscal_tax_group_id.tax_domain``), the
+        same canonical link already used by the account.tax compute_all
+        override.
+        """
         for tax in taxes:
-            kind = self._resolve_tax_kind(tax)
-            fields = self._IMPORTED_TAX_FIELD_MAP.get(kind)
-            if fields:
-                tax["amount"] = sign * (getattr(fiscal_line, fields[0]) or 0.0)
-                tax["base"] = sign * (getattr(fiscal_line, fields[1]) or 0.0)
-            elif (
-                "wh" in tax.get("name", "").lower()
-                or "ret" in tax.get("name", "").lower()
-            ):
+            acc_tax = self.env["account.tax"].browse(tax.get("id") or [])
+            if not acc_tax and tax.get("tax_repartition_line_id"):
+                acc_tax = (
+                    self.env["account.tax.repartition.line"]
+                    .browse(tax["tax_repartition_line_id"])
+                    .tax_id
+                )
+            fiscal_group = acc_tax.tax_group_id.fiscal_tax_group_id
+            if fiscal_group.tax_withholding:
                 # Clear withholding taxes: XML doesn't bring WH item per item
                 tax["amount"] = 0.0
                 tax["base"] = 0.0
+                continue
+            field_names = self._IMPORTED_TAX_FIELD_MAP.get(fiscal_group.tax_domain)
+            if field_names:
+                tax["amount"] = sign * (getattr(fiscal_line, field_names[0]) or 0.0)
+                tax["base"] = sign * (getattr(fiscal_line, field_names[1]) or 0.0)
 
     @api.depends(
         "tax_ids",

@@ -187,7 +187,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         # report "no movement" and the test would pass either way
         self.assertTrue(
             self.env["l10n_br_sped.fake.i010"].search_count([]),
-            "the fixture must have block I registers for this test to mean " "anything",
+            "the fixture must have block I registers for this test to mean anything",
         )
         sped = other._generate_sped_text()
 
@@ -289,52 +289,61 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         self.assertNotIn("oe_chatter", arch, "ainda monta o chatter da 17")
 
     def test_format_field_value(self):
-        """
-        Test the _format_field_value method from SpedMixin,
-        focusing on Float and Monetary types.
-        """
+        """An amount always carries two decimals; a quantity is not rounded."""
         mixin_instance = self.env["l10n_br_sped.fake.9.0000"]
 
-        # --- Test Float field formatting ---
-        mock_float_field = mock.Mock()
-        mock_float_field.type = "float"
-        mock_float_field.sped_decimals = 2  # Simulate the attribute you might add
-
-        # Test float with 2 decimals
-        self.assertEqual(
-            mixin_instance._format_field_value(mock_float_field, 1234.567),
-            "1234,567",
-        )
-        # Test float that results in integer after rounding
-        self.assertEqual(
-            mixin_instance._format_field_value(mock_float_field, 1234.001),
-            "1234,001",
-        )
-        # Test zero float
-        self.assertEqual(
-            mixin_instance._format_field_value(mock_float_field, 0.0),
-            "0",
-        )
-
-        # --- Test Monetary field formatting ---
+        # --- Monetary ---
         mock_monetary_field = mock.Mock()
         mock_monetary_field.type = "monetary"
 
         self.assertEqual(
             mixin_instance._format_field_value(mock_monetary_field, 789.123),
-            "789.123",
+            "789,12",
         )
         self.assertEqual(
             mixin_instance._format_field_value(mock_monetary_field, 789.00),
-            "789",
+            "789,00",
         )
-        # Test zero monetary
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_monetary_field, 17500.0),
+            "17500,00",
+        )
+        # A negative value keeps its sign
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_monetary_field, -15.5),
+            "-15,50",
+        )
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_monetary_field, 10.5),
+            "10,50",
+        )
         self.assertEqual(
             mixin_instance._format_field_value(mock_monetary_field, 0.0),
-            "",  # Your current logic returns "" for zero
+            "",
         )
 
-        # --- Test Integer field formatting ---
+        # --- Float ---
+        mock_float_field = mock.Mock()
+        mock_float_field.type = "float"
+
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_float_field, 500.0),
+            "500",
+        )
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_float_field, 0.125),
+            "0,125",
+        )
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_float_field, 1234.567),
+            "1234,567",
+        )
+        self.assertEqual(
+            mixin_instance._format_field_value(mock_float_field, 0.0),
+            "0",
+        )
+
+        # --- Integer ---
         mock_integer_field = mock.Mock()
         mock_integer_field.type = "integer"
         self.assertEqual(
@@ -389,6 +398,43 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
             arch,
         )
 
+    def test_attachment_lines_end_with_crlf(self):
+        """CR+LF after every register, the last one included."""
+        vals = self.declaration._create_sped_attachment("|0000|x|\n|9999|2|")
+        content = base64.b64decode(vals["datas"])
+        self.assertEqual(content, b"|0000|x|\r\n|9999|2|\r\n")
+
+    def test_failed_pull_blocks_the_file(self):
+        """Register whose pull failed would vanish from a well-formed file."""
+        declaration = self.declaration
+        register = self.env["l10n_br_sped.fake.i010"]
+        with (
+            patch.object(
+                type(self.env["l10n_br_sped.mixin"]),
+                "_get_top_registers",
+                return_value=[register],
+            ),
+            patch.object(
+                type(register),
+                "_pull_records_from_odoo",
+                side_effect=ValueError("broken mapping"),
+            ),
+            # the pull flushes first; flushing is not what this test is about
+            patch.object(type(self.env["l10n_br_sped.mixin"]), "_flush_registers"),
+        ):
+            declaration.button_populate_sped_from_odoo()
+        self.assertIn("broken mapping", declaration.pull_error)
+        with self.assertRaises(UserError):
+            declaration.button_create_sped_files()
+        # a clean pull releases the generation again
+        with patch.object(
+            type(self.env["l10n_br_sped.mixin"]),
+            "_get_top_registers",
+            return_value=[],
+        ):
+            declaration.button_populate_sped_from_odoo()
+        self.assertFalse(declaration.pull_error)
+
     def test_populate_and_split_attachment_creation(self):
         declaration = self.declaration
         self.assertEqual(declaration.state, "draft")
@@ -416,6 +462,8 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "_pull_records_from_odoo",
                 side_effect=mock_j900_pull_func,
             ),
+            # the pull flushes first; flushing is not what this test is about
+            patch.object(type(self.env["l10n_br_sped.mixin"]), "_flush_registers"),
         ):
             declaration.button_populate_sped_from_odoo()
 
@@ -499,7 +547,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|I015|DATA_BLOCO_I_LINE_3|...|",
                 "|I990|CLOSE_BLOCO_I|...|",
             ]
-            self.assertEqual(content_i, "\n".join(expected_content_i_lines))
+            self.assertEqual(content_i, "\r\n".join(expected_content_i_lines))
 
             # Check Bloco J
             att_j = attachments.filtered(
@@ -513,7 +561,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|J930|DATA_BLOCO_J_LINE_2|...|",
                 "|J990|CLOSE_BLOCO_J|...|",
             ]
-            self.assertEqual(content_j, "\n".join(expected_content_j_lines))
+            self.assertEqual(content_j, "\r\n".join(expected_content_j_lines))
 
             # Check Bloco C
             att_c = attachments.filtered(
@@ -528,7 +576,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
                 "|C100|DATA_BLOCO_C_LINE_3|...|",
                 "|C990|CLOSE_BLOCO_C|...|",
             ]
-            self.assertEqual(content_c, "\n".join(expected_content_c_lines))
+            self.assertEqual(content_c, "\r\n".join(expected_content_c_lines))
 
             # Test _create_sped_attachment directly
             single_attachment_val = declaration._create_sped_attachment(
@@ -890,9 +938,10 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         text = "|P200|1|DISCRIMINA\u00c7\u00c3O DA RECEITA BRUTA||\n"
         vals = self.declaration._create_sped_attachment(text)
         stored = base64.b64decode(vals["datas"])
-        self.assertEqual(stored, text.encode("iso-8859-1"))
+        # the file lines end with CR+LF
+        self.assertEqual(stored, text.replace("\n", "\r\n").encode("iso-8859-1"))
         # one byte per accented character, no utf-8 marker in the Latin range
-        self.assertEqual(len(stored), len(text))
+        self.assertEqual(len(stored), len(text) + 1)
         self.assertNotIn(b"\xc3\x87", stored)
 
     def test_character_outside_latin1_does_not_abort(self):
@@ -900,7 +949,7 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         text = "|I250|Taxa \u20ac de servico|\n"
         vals = self.declaration._create_sped_attachment(text)
         stored = base64.b64decode(vals["datas"])
-        self.assertEqual(len(stored), len(text))
+        self.assertEqual(len(stored), len(text) + 1)  # + CR
         self.assertIn(b"?", stored)
 
     def test_import_reads_latin1(self):

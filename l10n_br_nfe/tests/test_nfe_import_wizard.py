@@ -3,7 +3,9 @@ import os
 import re
 from unittest.mock import MagicMock, patch
 
+from odoo.exceptions import UserError
 from odoo.tests import TransactionCase
+from odoo.tools import mute_logger
 
 from odoo.addons import l10n_br_nfe
 
@@ -59,7 +61,10 @@ class NFeImportWizardTest(TransactionCase):
 
     def test_import_nfe_xml(self):
         xml = "dummy"
-        with self.assertRaises(ValueError):
+        with (
+            self.assertRaises(UserError),
+            mute_logger("odoo.addons.l10n_br_fiscal.wizards.document_import_wizard"),
+        ):
             self._prepare_wizard(xml.encode("utf-8"))
 
         mock_document = MagicMock(spec=["modelo_documento"])
@@ -226,6 +231,33 @@ class NFeImportWizardTest(TransactionCase):
                 self.wizard._match_product_by_purchase(
                     self.wizard._parse_file().infNFe.det[0].prod
                 )
+            )
+
+    def test_import_nfe_created_product_uom_from_xml(self):
+        """A product created during import gets its unit from the XML uCom.
+
+        The fiscal line's uom is computed from the product, but for a product
+        created during the import that computation runs before the product's
+        units are resolved, so the wizard must fall back to the unit it
+        matched from the XML uCom/uTrib. Otherwise ``_check_document_import``
+        rejects the document with "no unit of measure".
+        """
+        self._prepare_wizard(self.xml_1)
+        self.wizard.allow_product_creation = True
+        self.wizard.fiscal_operation_id = self.env.ref("l10n_br_fiscal.fo_compras")
+        _binding, edoc = self.wizard._import_edoc()
+        if hasattr(edoc, "_check_document_import"):
+            # integrity guard lives in l10n_br_account, which l10n_br_nfe
+            # does not depend on: skip it when the module is not installed
+            edoc._check_document_import()  # must not raise
+        self.assertTrue(edoc.fiscal_line_ids)
+        for line in edoc.fiscal_line_ids:
+            self.assertTrue(
+                line.uom_id, "created-product line must get a uom from the XML"
+            )
+            self.assertTrue(
+                line.product_id.uom_id,
+                "product created during import must get the XML unit",
             )
 
     def test__parse_xml(self):

@@ -41,6 +41,17 @@ msgid "%(name)s Tax Estimate Updated"
 msgstr "\"Estimativa de Impostos de %(name)s Atualizada"
 
 #. module: l10n_br_fiscal
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_document_line__icms_relief_type__0
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_document_line_mixin__icms_relief_type__0
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__purchase_blanket_order_line__icms_relief_type__0
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__purchase_order_line__icms_relief_type__0
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__sale_blanket_order_line__icms_relief_type__0
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__sale_order_line__icms_relief_type__0
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__stock_move__icms_relief_type__0
+msgid "0 - Do not deduct the ICMS Relief"
+msgstr ""
+
+#. module: l10n_br_fiscal
 #: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_document_line__icms_origin__0
 #: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_document_line_mixin__icms_origin__0
 #: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_operation_line__icms_origin__0
@@ -127,6 +138,17 @@ msgstr "09 - Outros"
 #: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__res_partner__ind_ie_dest__1
 msgid "1 - Contribuinte do ICMS"
 msgstr "1 - Contribuinte do ICMS"
+
+#. module: l10n_br_fiscal
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_document_line__icms_relief_type__1
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_document_line_mixin__icms_relief_type__1
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__purchase_blanket_order_line__icms_relief_type__1
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__purchase_order_line__icms_relief_type__1
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__sale_blanket_order_line__icms_relief_type__1
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__sale_order_line__icms_relief_type__1
+#: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__stock_move__icms_relief_type__1
+msgid "1 - Deduct ICMS Relief from Product Amount"
+msgstr ""
 
 #. module: l10n_br_fiscal
 #: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_document_line__icms_origin__1
@@ -419,11 +441,6 @@ msgstr ""
 #. module: l10n_br_fiscal
 #: model_terms:ir.ui.view,arch_db:l10n_br_fiscal.document_form
 msgid "<strong>Cancelled</strong>"
-msgstr ""
-
-#. module: l10n_br_fiscal
-#: model_terms:ir.ui.view,arch_db:l10n_br_fiscal.document_form
-msgid "<strong>Open</strong>"
 msgstr ""
 
 #. module: l10n_br_fiscal
@@ -2014,6 +2031,16 @@ msgid "Cost Price"
 msgstr "Preço de Custo"
 
 #. module: l10n_br_fiscal
+#. odoo-python
+#: code:addons/l10n_br_fiscal/wizards/document_import_wizard.py:0
+msgid ""
+"Could not read this file as the XML of an electronic fiscal document. Make "
+"sure you uploaded the XML itself, not its printed representation (PDF).\n"
+"\n"
+"%(error)s"
+msgstr ""
+
+#. module: l10n_br_fiscal
 #: model:ir.ui.menu,name:l10n_br_fiscal.country_menu
 msgid "Country"
 msgstr "País"
@@ -2095,6 +2122,11 @@ msgstr "Criar fatura/conta"
 #: model_terms:ir.actions.act_window,help:l10n_br_fiscal.product_action
 msgid "Create new products."
 msgstr "Criar novos produtos."
+
+#. module: l10n_br_fiscal
+#: model:ir.model.fields,field_description:l10n_br_fiscal.field_l10n_br_fiscal_document_import_wizard__allow_product_creation
+msgid "Create unmapped products"
+msgstr ""
 
 #. module: l10n_br_fiscal
 #: model:ir.model.fields,field_description:l10n_br_fiscal.field_l10n_br_fiscal_cest__create_uid
@@ -4378,6 +4410,12 @@ msgid "ICMS Relief"
 msgstr "Alívio do ICMS"
 
 #. module: l10n_br_fiscal
+#: model:ir.model.fields,field_description:l10n_br_fiscal.field_l10n_br_fiscal_document_line__icms_relief_type
+#: model:ir.model.fields,field_description:l10n_br_fiscal.field_l10n_br_fiscal_document_line_mixin__icms_relief_type
+msgid "ICMS Relief Deduction"
+msgstr ""
+
+#. module: l10n_br_fiscal
 #: model:ir.model.fields,field_description:l10n_br_fiscal.field_l10n_br_fiscal_document_line__icms_relief_value
 #: model:ir.model.fields,field_description:l10n_br_fiscal.field_l10n_br_fiscal_document_line_mixin__icms_relief_value
 msgid "ICMS Relief Value"
@@ -5225,6 +5263,15 @@ msgstr "Se marcado, novas mensagens solicitarão sua atenção."
 #: model:ir.model.fields,help:l10n_br_fiscal.field_l10n_br_fiscal_tax_definition__message_has_error
 msgid "If checked, some messages have a delivery error."
 msgstr "Se marcado, algumas mensagens tem erro de entrega."
+
+#. module: l10n_br_fiscal
+#: model:ir.model.fields,help:l10n_br_fiscal.field_l10n_br_fiscal_document_import_wizard__allow_product_creation
+msgid ""
+"If enabled, products that don't match an existing record will be "
+"automatically created during import. If disabled (default), the import will "
+"raise an error when an unmapped product is found so you can map it in the "
+"product lines above before importing."
+msgstr ""
 
 #. module: l10n_br_fiscal
 #: model:ir.model.fields,help:l10n_br_fiscal.field_res_company__is_industry
@@ -9366,6 +9413,15 @@ msgstr ""
 #: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__res_company__processador_edoc__oca
 msgid "erpbrasil.edoc"
 msgstr "erpbrasil.edoc"
+
+#. module: l10n_br_fiscal
+#: model:ir.model.fields,help:l10n_br_fiscal.field_l10n_br_fiscal_document_line__icms_relief_type
+#: model:ir.model.fields,help:l10n_br_fiscal.field_l10n_br_fiscal_document_line_mixin__icms_relief_type
+msgid ""
+"indDeduzDeson (NT 2023.004): indicates whether the ICMS relief value "
+"(vICMSDeson) is deducted from the item value (vProd) and from the document "
+"total (vNF)."
+msgstr ""
 
 #. module: l10n_br_fiscal
 #: model:ir.model.fields.selection,name:l10n_br_fiscal.selection__l10n_br_fiscal_base_wizard_mixin__state__init
