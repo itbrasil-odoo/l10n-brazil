@@ -142,9 +142,7 @@ class StockMove(models.Model):
         if not mixin_classes:
             return res
         mixin_names = {
-            field.name
-            for klass in mixin_classes
-            for field in klass._field_definitions
+            field.name for klass in mixin_classes for field in klass._field_definitions
         }
         for name in mixin_names:
             field = self._fields.get(name)
