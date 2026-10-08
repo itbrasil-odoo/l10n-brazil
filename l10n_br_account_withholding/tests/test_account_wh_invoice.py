@@ -13,6 +13,16 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
     def setUpClass(cls):
         super().setUpClass()
 
+        # The withholding invoices are created by the module, with no latam
+        # document number. With l10n_latam_invoice_document installed (the
+        # native l10n_br brings it) the journals of a Brazilian company demand
+        # one, so these tests opt the company's journals out.
+        journals = cls.env["account.journal"].search(
+            [("company_id", "=", cls.company_data["company"].id)]
+        )
+        if "l10n_latam_use_documents" in journals._fields:
+            journals.l10n_latam_use_documents = False
+
         # Ensure the NFe user group is enabled so fiscal fields are available
         # on invoices when the l10n_br_nfe module is installed.
         nfe_user_group = cls.env.ref("l10n_br_nfe.group_user", raise_if_not_found=False)
@@ -80,12 +90,12 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             {
                 "name": "Test Company Brasil",
                 "legal_name": "Test Company Brasil Ltda",
-                "cnpj_cpf": "32.680.221/0001-44",
+                "vat": "32.680.221/0001-44",
                 "state_id": cls.env.ref("base.state_br_sp").id,
                 "city_id": cls.env.ref("l10n_br_base.city_3550308").id,
                 "zip": "04576-060",
                 "country_id": cls.env.ref("base.br").id,
-                "inscr_est": "621.240.850.633",
+                "l10n_br_ie_code": "621.240.850.633",
                 "is_company": True,
                 "active": True,
             }
@@ -147,7 +157,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             .search(
                 [
                     ("name", "=", "COFINS a Recolher"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -183,7 +193,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             .search(
                 [
                     ("name", "=", "ICMS s/ Vendas"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -219,7 +229,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             .search(
                 [
                     ("name", "=", "ICMS a Compensar"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -255,7 +265,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             .search(
                 [
                     ("name", "=", "IPI s/ Vendas"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -291,7 +301,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             .search(
                 [
                     ("name", "=", "IPI a Compensar"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -327,7 +337,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             .search(
                 [
                     ("name", "=", "PIS a Recolher"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -473,7 +483,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
                 "code": "WHT210",
                 "account_type": "liability_payable",
                 "reconcile": True,
-                "company_id": self.company_data["company"].id,
+                "company_ids": [Command.set(self.company_data["company"].ids)],
             }
         )
 
