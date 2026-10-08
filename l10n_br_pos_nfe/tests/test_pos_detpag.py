@@ -150,3 +150,45 @@ class TestPosDetPag(TestPosOrderInvoice):
 
         card = order.account_move.fiscal_document_id.nfe40_detPag.nfe40_card
         self.assertEqual(card.nfe40_cAut, "112233")
+
+    def test_change_goes_to_vtroco_not_to_a_negative_group(self):
+        """Venda de 80 paga com 100 em dinheiro: 100 recebidos, 20 de troco.
+
+        O core registra o troco como um pagamento negativo (``is_change``).
+        Ele não é um meio de pagamento: no leiaute o recebido vai em ``vPag``
+        e o troco em ``vTroco``, e a SEFAZ confere que ``vTroco`` é a soma dos
+        pagamentos menos o total da nota (rejeições 866 e 869). Um ``vPag``
+        negativo nem passa no esquema.
+        """
+        self.payment_method.fiscal_payment_form = "01"
+        order = self._sell(price=80.0, pay=False)
+        order.add_payment(
+            {
+                "amount": 100.0,
+                "payment_method_id": self.payment_method.id,
+                "pos_order_id": order.id,
+            }
+        )
+        # como o core grava o troco em pos.order._process_order
+        order.add_payment(
+            {
+                "name": "return",
+                "amount": -20.0,
+                "payment_method_id": self.payment_method.id,
+                "pos_order_id": order.id,
+                "is_change": True,
+            }
+        )
+        order.action_pos_order_paid()
+        order.with_context(generate_pdf=False)._generate_pos_order_invoice()
+
+        document = order.account_move.fiscal_document_id
+        detpag = document.nfe40_detPag
+        self.assertEqual(detpag.mapped("nfe40_tPag"), ["01"])
+        self.assertAlmostEqual(detpag.nfe40_vPag, 100.0, places=2)
+        self.assertAlmostEqual(document.nfe40_vTroco, 20.0, places=2)
+        self.assertAlmostEqual(
+            sum(detpag.mapped("nfe40_vPag")) - document.nfe40_vTroco,
+            order.account_move.amount_total,
+            places=2,
+        )
