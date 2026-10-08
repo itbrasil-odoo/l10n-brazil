@@ -3,9 +3,10 @@
 
 from datetime import date
 
-from odoo.tests import common
+from odoo.tests import common, tagged
 
 
+@tagged("post_install", "-at_install")
 class SpedEfdPisCofinsGenerateTest(common.TransactionCase):
     @classmethod
     def setUpClass(cls):
@@ -20,6 +21,13 @@ class SpedEfdPisCofinsGenerateTest(common.TransactionCase):
         )
         for index, document in enumerate(documents):
             vals = {}
+            if not document.document_date and document.document_key:
+                # The access key already carries the month of issue. Dating
+                # this document in the test period would contradict its own
+                # key, which l10n_br_nfe refuses on an authorized document:
+                # it stays out of the period, unauthorized.
+                documents -= document
+                continue
             if not document.document_date:
                 vals["document_date"] = date(2024, 1, 10 + index)
                 vals["date_in_out"] = date(2024, 1, 10 + index)
