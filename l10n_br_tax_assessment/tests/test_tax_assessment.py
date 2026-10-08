@@ -603,6 +603,11 @@ class TestTaxAssessmentCompute(AccountTestInvoicingCommon):
                 "country_id": self.company.country_id.id,
             }
         )
+        # In 18.0 the chart of accounts of a new branch is loaded by a
+        # precommit hook, which a test transaction never reaches: without
+        # running it the branch has no receivable account and the invoice
+        # cannot even be created.
+        self.env.cr.precommit.run()
         branch.account_fiscal_country_id = self.company.account_fiscal_country_id
         self.env.user.company_ids |= branch
         move = (
