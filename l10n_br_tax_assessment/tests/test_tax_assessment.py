@@ -11,6 +11,20 @@ from odoo.tools import mute_logger
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 
 
+def _without_latam_documents(company):
+    """Plain invoices for a company that l10n_latam treats as "uses documents".
+
+    When l10n_latam_invoice_document is installed (the native l10n_br brings
+    it), every sale and purchase journal of a Brazilian company requires a
+    latam document type and number. The tests below post plain invoices through
+    the core helper, which knows nothing about those fields: they are about the
+    assessment arithmetic, not about document numbering.
+    """
+    journals = company.env["account.journal"].search([("company_id", "=", company.id)])
+    if "l10n_latam_use_documents" in journals._fields:
+        journals.l10n_latam_use_documents = False
+
+
 @tagged("post_install", "-at_install")
 class TestTaxAssessment(AccountTestInvoicingCommon):
     # 18.0: the chart is a class attribute, chart_template_ref is gone
@@ -544,6 +558,7 @@ class TestTaxAssessmentCompute(AccountTestInvoicingCommon):
     def setUpClass(cls):
         super().setUpClass()
         cls.company = cls.company_data["company"]
+        _without_latam_documents(cls.company)
         cls.group = cls.env["account.tax.group"].create({"name": "ICMS (compute)"})
         cls.sale_tax = cls.env["account.tax"].create(
             {
@@ -588,6 +603,11 @@ class TestTaxAssessmentCompute(AccountTestInvoicingCommon):
                 "country_id": self.company.country_id.id,
             }
         )
+        # In 18.0 the chart of accounts of a new branch is loaded by a
+        # precommit hook, which a test transaction never reaches: without
+        # running it the branch has no receivable account and the invoice
+        # cannot even be created.
+        self.env.cr.precommit.run()
         branch.account_fiscal_country_id = self.company.account_fiscal_country_id
         self.env.user.company_ids |= branch
         move = (
@@ -817,6 +837,7 @@ class TestTaxAssessmentClosingBook(AccountTestInvoicingCommon):
     def setUpClass(cls):
         super().setUpClass()
         cls.company = cls.company_data["company"]
+        _without_latam_documents(cls.company)
         cls.payable = cls.env["account.account"].create(
             {
                 "name": "ICMS a recolher",

@@ -271,7 +271,11 @@ class TestPosOrderInvoice(TransactionCase):
             company=order.company_id,
         )
 
-        self.assertIn("formatted_amount_total", resumo)
+        # Chegar até aqui já é o teste: sem o método, a chamada acima morre com
+        # AttributeError. O total confere que o trecho brasileiro respondeu
+        # pelo documento. (No 18.0 o resumo não traz mais as chaves
+        # `formatted_*`; a formatação passou para a tela.)
+        self.assertAlmostEqual(resumo["total_amount_currency"], order.amount_total)
 
 
 @tagged("post_install", "-at_install")

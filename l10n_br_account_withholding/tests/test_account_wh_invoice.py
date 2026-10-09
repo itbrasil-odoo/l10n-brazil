@@ -13,6 +13,21 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
     def setUpClass(cls):
         super().setUpClass()
 
+        # The withholding invoices are created by the module, with no latam
+        # document number. With l10n_latam_invoice_document installed (the
+        # native l10n_br brings it) the journals of a Brazilian company demand
+        # one, so these tests opt the company's journals out.
+        journals = cls.env["account.journal"].search(
+            [("company_id", "=", cls.company_data["company"].id)]
+        )
+        if "l10n_latam_use_documents" in journals._fields:
+            journals.l10n_latam_use_documents = False
+
+        # Opt in to the fiscal tax definitions of the demo company. Without
+        # them the engine has no ICMS to apply to the purchase and the invoice
+        # posts with no ICMS lines at all.
+        cls.configure_normal_company_taxes()
+
         # Ensure the NFe user group is enabled so fiscal fields are available
         # on invoices when the l10n_br_nfe module is installed.
         nfe_user_group = cls.env.ref("l10n_br_nfe.group_user", raise_if_not_found=False)
@@ -80,12 +95,12 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             {
                 "name": "Test Company Brasil",
                 "legal_name": "Test Company Brasil Ltda",
-                "cnpj_cpf": "32.680.221/0001-44",
+                "vat": "32.680.221/0001-44",
                 "state_id": cls.env.ref("base.state_br_sp").id,
                 "city_id": cls.env.ref("l10n_br_base.city_3550308").id,
                 "zip": "04576-060",
                 "country_id": cls.env.ref("base.br").id,
-                "inscr_est": "621.240.850.633",
+                "l10n_br_ie_code": "621.240.850.633",
                 "is_company": True,
                 "active": True,
             }
@@ -120,6 +135,11 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
     def test_compra_para_revenda(self):
         """
         Test move with deductible taxes and withholding taxes
+
+        The journal items are named after their tax (18.0). The ICMS is the one
+        the demo tax definitions give this product, "ICMS 12% Com Red. 26,57%"
+        (CST 20): base 1000.00 less 26.57% = 734.30, at 12% = 88.12. The
+        expected 120.00 dated from when the scenario fell on a plain 12%.
         """
         product_line_vals_1 = {
             "name": self.product_a.display_name,
@@ -141,13 +161,13 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
         }
 
         tax_line_vals_cofins_wh = {
-            "name": "COFINS RET",
+            "name": "COFINS WH Entrada",
             "product_id": False,
             "account_id": self.env["account.account"]
             .search(
                 [
                     ("name", "=", "COFINS a Recolher"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -177,13 +197,13 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
         }
 
         tax_line_vals_icms_comp = {
-            "name": "ICMS",
+            "name": "ICMS Entrada Dedutível",
             "product_id": False,
             "account_id": self.env["account.account"]
             .search(
                 [
                     ("name", "=", "ICMS s/ Vendas"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -206,20 +226,20 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             )
             .id,
             "currency_id": self.company_data["currency"].id,
-            "amount_currency": -120.0,
+            "amount_currency": -88.12,
             "debit": 0.0,
-            "credit": 120.0,
+            "credit": 88.12,
             "date_maturity": False,
         }
 
         tax_line_vals_icms = {
-            "name": "ICMS",
+            "name": "ICMS Entrada",
             "product_id": False,
             "account_id": self.env["account.account"]
             .search(
                 [
                     ("name", "=", "ICMS a Compensar"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -242,20 +262,20 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             )
             .id,
             "currency_id": self.company_data["currency"].id,
-            "amount_currency": 120.0,
-            "debit": 120.0,
+            "amount_currency": 88.12,
+            "debit": 88.12,
             "credit": 0.0,
             "date_maturity": False,
         }
 
         tax_line_vals_ipi_comp = {
-            "name": "IPI",
+            "name": "IPI Entrada Dedutível",
             "product_id": False,
             "account_id": self.env["account.account"]
             .search(
                 [
                     ("name", "=", "IPI s/ Vendas"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -285,13 +305,13 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
         }
 
         tax_line_vals_ipi = {
-            "name": "IPI",
+            "name": "IPI Entrada",
             "product_id": False,
             "account_id": self.env["account.account"]
             .search(
                 [
                     ("name", "=", "IPI a Compensar"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -321,13 +341,13 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
         }
 
         tax_line_vals_pis_wh = {
-            "name": "PIS RET",
+            "name": "PIS WH Entrada",
             "product_id": False,
             "account_id": self.env["account.account"]
             .search(
                 [
                     ("name", "=", "PIS a Recolher"),
-                    ("company_id", "=", self.company_data["company"].id),
+                    ("company_ids", "in", self.company_data["company"].ids),
                 ],
                 limit=1,
             )
@@ -382,7 +402,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             "journal_id": self.company_data["default_journal_purchase"].id,
             "date": fields.Date.from_string("2019-01-31"),
             "fiscal_position_id": False,
-            "payment_reference": "",
+            "payment_reference": False,
             "invoice_payment_term_id": self.pay_terms_a.id,
             "amount_untaxed": 1000.0,
             "amount_tax": 32.5,
@@ -394,10 +414,10 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
             [
                 product_line_vals_1,
                 tax_line_vals_cofins_wh,
-                tax_line_vals_icms_comp,
                 tax_line_vals_icms,
-                tax_line_vals_ipi_comp,
+                tax_line_vals_icms_comp,
                 tax_line_vals_ipi,
+                tax_line_vals_ipi_comp,
                 tax_line_vals_pis_wh,
                 term_line_vals_1,
             ],
@@ -473,7 +493,7 @@ class AccountMoveWithWhInvoice(AccountMoveBRCommon):
                 "code": "WHT210",
                 "account_type": "liability_payable",
                 "reconcile": True,
-                "company_id": self.company_data["company"].id,
+                "company_ids": [Command.set(self.company_data["company"].ids)],
             }
         )
 
