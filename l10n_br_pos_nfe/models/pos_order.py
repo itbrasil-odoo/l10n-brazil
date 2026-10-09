@@ -14,7 +14,21 @@ class PosOrder(models.Model):
         detpag = self._prepare_nfe_detpag()
         if detpag:
             vals["nfe40_detPag"] = detpag
+            change = self._nfe_change_amount()
+            if change:
+                vals["nfe40_vTroco"] = change
         return vals
+
+    def _nfe_change_amount(self):
+        """O troco devolvido ao cliente, para o campo vTroco.
+
+        O core o registra como um pagamento negativo marcado ``is_change``. A
+        SEFAZ confere que vTroco é a soma dos vPag menos o total da nota
+        (rejeições 866 e 869).
+        """
+        self.ensure_one()
+        change = self.sudo().payment_ids.filtered("is_change")
+        return -sum(change.mapped("amount"))
 
     def _prepare_nfe_detpag(self):
         """Um grupo detPag por pagamento, na ordem em que foram recebidos.
@@ -28,7 +42,9 @@ class PosOrder(models.Model):
         order = self.sudo()
         commands = []
         for payment in order.payment_ids:
-            if not payment.fiscal_payment_form:
+            # O troco não é um meio de pagamento: vai em vTroco. Como grupo
+            # detPag ele sairia com vPag negativo, que o esquema recusa.
+            if payment.is_change or not payment.fiscal_payment_form:
                 continue
             values = {
                 # Cartão parcelado é à vista para o emitente: o parcelamento
