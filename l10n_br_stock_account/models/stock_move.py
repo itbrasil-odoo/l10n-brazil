@@ -129,6 +129,11 @@ class StockMove(models.Model):
         # default, but stock.move depends on non-precomputed fields like
         # partner_id and quantity. All those precomputed computed fields must
         # be disabled to avoid the Odoo 18 warnings during registry setup.
+        # The mixin shows up once per module that defines or extends it, most
+        # recent extension first. Every one of them has to be considered: with
+        # only the first, a database where another module extends the mixin
+        # sees just that extension's fields and leaves the original ones
+        # precomputed, which brings all the warnings back.
         mixin_classes = [
             klass
             for klass in self._model_classes__
@@ -136,8 +141,9 @@ class StockMove(models.Model):
         ]
         if not mixin_classes:
             return res
-        mixin_class = mixin_classes[0]
-        mixin_names = {field.name for field in mixin_class._field_definitions}
+        mixin_names = {
+            field.name for klass in mixin_classes for field in klass._field_definitions
+        }
         for name in mixin_names:
             field = self._fields.get(name)
             if field is None or not field.precompute:
@@ -149,14 +155,18 @@ class StockMove(models.Model):
                 continue
             if not field.compute:
                 continue
-            # Look at the mixin method, not the stock.move override: the
+            # Look at the mixin methods, not the stock.move override: the
             # override may not repeat @api.depends, but the original field
             # definition still declares dependencies that drive precompute.
-            compute = getattr(mixin_class, field.compute, None)
-            if compute is None:
-                continue
-            func = getattr(compute, "__func__", compute)
-            if not getattr(func, "_depends", None):
+            # Any mixin class declaring them is enough.
+            has_depends = False
+            for klass in mixin_classes:
+                compute = klass.__dict__.get(field.compute)
+                func = getattr(compute, "__func__", compute)
+                if getattr(func, "_depends", None):
+                    has_depends = True
+                    break
+            if not has_depends:
                 # Compute methods without explicit @api.depends rely on
                 # precompute to get their initial value (e.g. ind_final).
                 # Keep precompute enabled for them.

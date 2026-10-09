@@ -2,8 +2,19 @@
 # License AGPL-3 - See http://www.gnu.org/licenses/agpl-3.0.html
 
 import logging
+import warnings
 
-from erpbrasil.assinatura import misc
+# signxml<5 imports OpenSSL.crypto.verify, deprecated by pyOpenSSL, so every
+# Odoo process logs a DeprecationWarning the first time signxml is imported.
+# This is that first import. There is nothing to fix on our side: signxml>=5
+# needs cryptography>=45 and Odoo 18 pins 42.
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        message=r"verify\(\) is deprecated",
+        category=DeprecationWarning,
+    )
+    from erpbrasil.assinatura import misc
 
 from odoo import _
 
