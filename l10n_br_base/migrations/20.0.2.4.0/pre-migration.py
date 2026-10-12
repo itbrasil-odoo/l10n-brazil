@@ -49,6 +49,16 @@ def _keep_legacy_banks(cr):
         )
         if _column_exists(cr, "res_bank", column)
     ]
+    # Custom fields (Studio or manual, always prefixed with x_) hold data that
+    # has nowhere else to go either.
+    cr.execute(
+        """
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'res_bank' AND column_name LIKE 'x\\_%'
+        ORDER BY ordinal_position
+        """
+    )
+    columns += [f'"{row[0]}"' for row in cr.fetchall()]
     cr.execute(  # pylint: disable=sql-injection
         f"CREATE TABLE {LEGACY_TABLE} AS SELECT {', '.join(columns)} FROM res_bank"
     )
