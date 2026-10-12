@@ -1,3 +1,12 @@
+## 20.0.2.4.0 (2026)
+
+Migração dos dados de `res.bank` (removido no Odoo 20.0): o script
+`migrations/20.0.2.4.0/pre-migration.py` copia o código do banco
+(`res.bank.code_bc`) para `res.partner.bank.code_bc` de cada conta e guarda
+uma cópia do diretório de bancos (com `short_name`, `ispb_number` e
+`compe_member`, que não têm mais campo de destino) na tabela
+`l10n_br_base_legacy_res_bank`.
+
 ## 20.0.2.2.1 (2026)
 
 O Odoo 20.0 removeu o campo `company_type` dos parceiros e o modelo

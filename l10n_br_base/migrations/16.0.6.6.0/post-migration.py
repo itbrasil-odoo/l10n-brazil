@@ -29,8 +29,10 @@ def recompute_cnpj_cpf_stripped(env):
         model = env[model_name].with_context(active_test=False)
         records = model.search([])
         stale = records.filtered(
-            lambda rec: (rec.cnpj_cpf_stripped or False)
-            != (_expected_stripped(rec.vat) or False)
+            lambda rec: (
+                (rec.cnpj_cpf_stripped or False)
+                != (_expected_stripped(rec.vat) or False)
+            )
         )
         if not stale:
             continue
