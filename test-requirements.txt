@@ -1,0 +1,2 @@
+# account_due_list is not merged in OCA/account-payment 20.0 yet
+odoo-addon-account_due_list @ git+https://github.com/OCA/account-payment@refs/pull/981/head#subdirectory=account_due_list
