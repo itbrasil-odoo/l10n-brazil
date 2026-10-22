@@ -1,5 +1,5 @@
 from odoo.exceptions import ValidationError
-from odoo.tests import TransactionCase
+from odoo.tests import TransactionCase, new_test_user
 
 
 class TestL10nBr(TransactionCase):
@@ -82,3 +82,23 @@ class TestL10nBr(TransactionCase):
         self.assertEqual(self.employee.marital, "common_law_marriage")
         self.employee.marital = "separated"
         self.assertEqual(self.employee.marital, "separated")
+
+    def test_default_country_on_version(self):
+        brazil = self.env.ref("base.br")
+        self.assertEqual(self.employee.version_id.country_id, brazil)
+        self.assertEqual(self.employee.country_id, brazil)
+
+    def test_country_inherited_from_version(self):
+        field = self.env["hr.employee"]._fields["country_id"]
+        self.assertTrue(field.inherited)
+        self.assertFalse(field.store)
+
+    def test_public_profile_read_by_non_hr_user(self):
+        # Reading any field prefetches the others; country_id must not be
+        # among them for a user restricted to employee public profiles.
+        user = new_test_user(
+            self.env, login="l10n_br_hr_public", groups="base.group_user"
+        )
+        employee = self.employee.with_user(user)
+        employee.invalidate_recordset()
+        self.assertEqual(employee.name, "l10n brazil demo employee")
