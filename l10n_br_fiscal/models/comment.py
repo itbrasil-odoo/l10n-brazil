@@ -200,6 +200,6 @@ class Comment(models.Model):
         self.ensure_one()
         if not self.object_id:
             raise UserError(
-                self.env._("Select a reference record to test this message against.")
+                self.env._("Select a reference document to test the message.")
             )
         self.test_comment = self.compute_message(self._test_message_vals())

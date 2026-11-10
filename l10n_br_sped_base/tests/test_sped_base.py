@@ -1053,4 +1053,5 @@ class TestSpedBase(TransactionCase, FakeModelLoader):
         # the company record overwrites what was on the form
         self.assertEqual(declaration.NOME, "Company legal name")
         mapped = declaration._map_from_odoo(company, None, declaration)
-        self.assertEqual(declaration.CNPJ, mapped["CNPJ"] or "00000000000000")
+        # even an empty company value replaces the typed one: the record wins
+        self.assertEqual(declaration.CNPJ or "", mapped["CNPJ"] or "")
