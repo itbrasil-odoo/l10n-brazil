@@ -56,19 +56,22 @@ class L10nBrFiscalDfeDocument(models.Model):
         if not self:
             return
 
-        access_keys = tuple(self.mapped("access_key"))
-
-        # Batch query: get latest event per access key in a single query
-        self.env.cr.execute(
-            """
-            SELECT DISTINCT ON (access_key) access_key, event_type
-            FROM l10n_br_nfe_md_event
-            WHERE access_key IN %s AND state = 'done'
-            ORDER BY access_key, id DESC
-            """,
-            (access_keys,),
-        )
-        latest_events = dict(self.env.cr.fetchall())
+        # Records without access key (e.g. new records) have no events and
+        # would turn the query into "IN (false)", which PostgreSQL rejects
+        access_keys = tuple(key for key in self.mapped("access_key") if key)
+        latest_events = {}
+        if access_keys:
+            # Batch query: get latest event per access key in a single query
+            self.env.cr.execute(
+                """
+                SELECT DISTINCT ON (access_key) access_key, event_type
+                FROM l10n_br_nfe_md_event
+                WHERE access_key IN %s AND state = 'done'
+                ORDER BY access_key, id DESC
+                """,
+                (access_keys,),
+            )
+            latest_events = dict(self.env.cr.fetchall())
 
         for record in self:
             record.manifestation_status = latest_events.get(
@@ -118,6 +121,23 @@ class L10nBrFiscalDfeDocument(models.Model):
             },
         }
 
+    def action_view_imported_document(self):
+        """Open the invoice created from this DF-e.
+
+        Falls back to the fiscal document itself when accounting is not
+        installed, as this module does not depend on l10n_br_account.
+        """
+        self.ensure_one()
+        document = self.fiscal_document_id
+        moves = document.move_ids if "move_ids" in document._fields else document
+        record = moves[:1] or document
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": record._name,
+            "res_id": record.id,
+            "view_mode": "form",
+        }
+
     def import_document(self):
         if self.fiscal_type != "nfe":
             return super().import_document()
@@ -159,7 +179,7 @@ class L10nBrFiscalDfeDocument(models.Model):
             {
                 "name": f"DANFE_{complete.access_key}.pdf",
                 "datas": base64.b64encode(buf.getvalue()),
-                "res_model": self._name,
+                "res_model": complete._name,
                 "res_id": complete.id,
                 "mimetype": "application/pdf",
             }

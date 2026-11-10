@@ -21,4 +21,7 @@ from . import (
     test_operation,
     test_company_tax_domain,
     test_document_import_wizard,
+    test_icmssn,
+    test_simplified_tax,
+    test_tax_pis_cofins,
 )

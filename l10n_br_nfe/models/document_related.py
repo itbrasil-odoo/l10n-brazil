@@ -28,11 +28,13 @@ class NFeRelated(spec_models.StackedModel):
     _rec_name = "nfe40_refNFe"
 
     # When dynamic stacking is applied, this class has the following structure:
+    # (+ content of the m2o is stacked in the parent / - standard m2o /
+    # ≡ o2m; the mapped Odoo model may follow the tag)
     NFREF_TREE = """
-> <nfref>
-    > <refNF>
-    > <refNFP>
-    > <refECF>"""
++ <nfref>
+    + <refNF>
+    + <refNFP>
+    + <refECF>"""
 
     nfe40_choice_nfref = fields.Selection(
         [
@@ -56,25 +58,6 @@ class NFeRelated(spec_models.StackedModel):
         compute="_compute_nfe_data",
         inverse="_inverse_nfe40_refCTe",
     )
-
-    # TODO
-    # nfe40_refNF = fields.Many2one(
-    #     compute='_compute_nfe_data',
-    #     inverse='_inverse_nfe40_refNF',
-    #     store=True,
-    # )
-    #
-    # nfe40_refNFP = fields.Many2one(
-    #     compute='_compute_nfe_data',
-    #     inverse='_inverse_nfe40_refNFP',
-    #     store=True,
-    # )
-    #
-    # nfe40_refECF = fields.Many2one(
-    #     compute='_compute_nfe_data',
-    #     inverse='_inverse_nfe40_refECF',
-    #     store=True,
-    # )
 
     @api.depends("document_type_id")
     def _compute_nfe_data(self):

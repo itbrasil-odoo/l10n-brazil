@@ -87,13 +87,10 @@ class InstallmentRenegotiationWizard(models.TransientModel):
         else:
             amount_company = self.original_total
 
-        # Migração 16 → 18: `_compute_terms` deixou de devolver a lista de
-        # parcelas e passou a devolver um dicionário do plano inteiro, com as
-        # parcelas em `line_ids` e mais desconto por antecipação. Iterar o
-        # retorno direto, como na 16, percorre as CHAVES do dicionário — e o
-        # erro só aparece na primeira parcela, como "'str' object has no
-        # attribute 'get'".
-        term_plan = self.payment_term_id._compute_terms(
+        # Leverage standard Odoo 18 payment term computation
+        # We pass the full remaining total as the 'untaxed' amount
+        # to simply split the balance
+        pay_term = self.payment_term_id._compute_terms(
             date_ref=self.starting_date,
             currency=currency,
             tax_amount_currency=0.0,
@@ -117,7 +114,7 @@ class InstallmentRenegotiationWizard(models.TransientModel):
                     else False,
                 }
             )
-            for line in term_plan["line_ids"]
+            for line in pay_term.get("line_ids", [])
         ]
 
         self.line_ids = commands
@@ -255,12 +252,6 @@ class InstallmentRenegotiationWizard(models.TransientModel):
             skip_invoice_sync=True,
             allow_installment_renegotiation=True,
             check_move_validity=False,
-            # Migração 16 → 18: a 18 passou a barrar a escrita de um conjunto de
-            # campos em lançamento postado — entre eles `invoice_payment_term_id`
-            # e `line_ids`, que são exatamente o que uma renegociação muda. A
-            # própria account oferece a chave de contexto para a operação
-            # legítima (account_move.py, "Disallow modifying readonly fields on
-            # a posted move"); sem ela a renegociação é impossível na 18.
             skip_readonly_check=True,
         )
 
@@ -330,8 +321,6 @@ class InstallmentRenegotiationWizard(models.TransientModel):
                 create_vals["payment_mode_id"] = vals["payment_mode_id"]
 
             self.env["account.move.line"].with_context(**ctx).sudo().create(create_vals)
-
-        move.with_context(**ctx).update_payment_term_number()
 
         # DUCK TYPING: Generate New Boletos / CNAB records (Inclusão)
         if hasattr(move, "load_cnab_info"):

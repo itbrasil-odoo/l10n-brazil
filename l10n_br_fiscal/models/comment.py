@@ -6,7 +6,7 @@ from datetime import datetime
 
 from dateutil.relativedelta import relativedelta
 
-from odoo import _, api, fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 from ..constants.fiscal import (
@@ -75,8 +75,8 @@ class Comment(models.Model):
         these templates.
         """
         return [
-            (FISCAL_COMMENT_DOCUMENT_MODEL, _("Fiscal Document")),
-            (FISCAL_COMMENT_LINE_MODEL, _("Fiscal Document Line")),
+            (FISCAL_COMMENT_DOCUMENT_MODEL, self.env._("Fiscal Document")),
+            (FISCAL_COMMENT_LINE_MODEL, self.env._("Fiscal Document Line")),
         ]
 
     @api.model
@@ -96,7 +96,7 @@ class Comment(models.Model):
             return name
 
         for record in self:
-            record.display_name = truncate_name(record.comment)
+            record.display_name = truncate_name(record.comment or "")
 
     # format_amount function for fiscal observation
     # This way we can format numbers in currency template on fiscal observation
@@ -126,6 +126,8 @@ class Comment(models.Model):
             return False
 
         from jinja2.sandbox import SandboxedEnvironment
+
+        lang_br = self.env.ref("base.lang_pt_BR")
 
         mako_template_env = SandboxedEnvironment(
             block_start_string="<%",
@@ -162,6 +164,11 @@ class Comment(models.Model):
                         self.env, amount, self.env.ref("base.BRL")
                     )
                 ),
+                "format_number": (
+                    lambda value, format_pattern="%.2f": lang_br.format(
+                        format_pattern, value, grouping=True
+                    )
+                ),
             }
         )
         mako_safe_env = copy.copy(mako_template_env)
@@ -193,6 +200,6 @@ class Comment(models.Model):
         self.ensure_one()
         if not self.object_id:
             raise UserError(
-                _("Select a reference record to test this message against.")
+                self.env._("Select a reference record to test this message against.")
             )
         self.test_comment = self.compute_message(self._test_message_vals())

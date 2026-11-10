@@ -1,7 +1,7 @@
 # Copyright (C) 2009  Renato Lima - Akretion
 # License AGPL-3 - See http://www.gnu.org/licenses/agpl-3.0.html
 
-from odoo import Command, _, api, fields, models
+from odoo import Command, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -58,7 +58,7 @@ class StockInvoiceOnshipping(models.TransientModel):
             journal = picking.fiscal_operation_id.journal_id
             if not journal:
                 raise UserError(
-                    _(
+                    self.env._(
                         "Invalid Journal! There is not journal defined"
                         " for this company: %(company)s in fiscal operation:"
                         " %(operation)s!",
@@ -145,8 +145,13 @@ class StockInvoiceOnshipping(models.TransientModel):
 
         values = super()._get_invoice_line_values(moves, invoice_values, invoice)
         move = fields.first(moves)
+
+        if not move.fiscal_operation_id and move.picking_id.fiscal_operation_id:
+            # moves created before the picking operation reached them
+            move.fiscal_operation_id = move.picking_id.fiscal_operation_id
+
         if not move.fiscal_operation_id:
-            # Caso Brasileiro se caracteriza pela Operação Fiscal
+            # Brazilian case is characterized by having a Fiscal Operation
             return values
 
         fiscal_values = move._prepare_br_fiscal_dict()

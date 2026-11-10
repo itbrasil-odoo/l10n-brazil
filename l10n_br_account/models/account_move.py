@@ -353,6 +353,9 @@ class AccountMove(models.Model):
             move.amount_untaxed_signed = sign * sum(
                 inv_line_ids.mapped("fiscal_amount_untaxed")
             )
+            move.amount_untaxed_in_currency_signed = sign * sum(
+                inv_line_ids.mapped("fiscal_amount_untaxed")
+            )
             move.amount_tax_signed = sign * sum(
                 inv_line_ids.mapped("fiscal_amount_tax")
             )
@@ -769,22 +772,9 @@ class AccountMove(models.Model):
             # been cancelled by action_document_cancel() above, so skip the
             # back2draft to keep it in 'cancelada' (matching 16.0 behavior).
             return super().button_draft()
-        # Process fiscal documents first to sync their state
+        # Process fiscal documents first to sync their state (the fiscal
+        # document refuses back2draft when its cancellation is registered in SEFAZ)
         for move in self.filtered(lambda d: d.document_type_id):
-            if (
-                move.state_edoc == DOCUMENT_STATE_CANCEL
-                and move.document_number
-                and move.issuer == DOCUMENT_ISSUER_COMPANY
-                and move.fiscal_document_id.cancel_event_id
-            ):
-                raise UserError(
-                    self.env._(
-                        "You can't set this document number: %(doc_number)s to draft "
-                        "because this document is cancelled in SEFAZ",
-                        doc_number=move.document_number,
-                    )
-                )
-
             # Sync fiscal document state (this is idempotent)
             # Pass in_button_draft context to prevent document.py from
             # calling button_draft again (which would cause double super call)
@@ -963,10 +953,12 @@ class AccountMove(models.Model):
         void_states = (DOCUMENT_STATE_CANCEL, SITUACAO_EDOC_DENEGADA)
         settled_payment_states = ("in_payment", "paid", "partial")
         return self.filtered(
-            lambda move: move.payment_state in settled_payment_states
-            and any(
-                document.state_edoc in void_states
-                for document in move.fiscal_document_ids
+            lambda move: (
+                move.payment_state in settled_payment_states
+                and any(
+                    document.state_edoc in void_states
+                    for document in move.fiscal_document_ids
+                )
             )
         )
 
@@ -1223,11 +1215,17 @@ class AccountMove(models.Model):
         if not move_id or not move.fiscal_document_id:
             move_form.partner_id = fiscal_document.partner_id
             move_form.invoice_date = fiscal_document.document_date
-            move_form.date = fiscal_document.document_date
             move_form.document_type_id = fiscal_document.document_type_id
             move_form.fiscal_document_id = fiscal_document
             move_form.fiscal_operation_id = fiscal_document.fiscal_operation_id
-            move_form.document_serie = fiscal_document.document_serie
+            for field_name, value in (
+                ("date", fiscal_document.document_date),
+                ("document_serie", fiscal_document.document_serie),
+            ):
+                if not move_form._get_modifier(field_name, "invisible"):
+                    setattr(move_form, field_name, value)
+            if not move_form._get_modifier("document_serie_id", "invisible"):
+                move_form.document_serie_id = fiscal_document._import_document_serie()
             if (
                 "l10n_latam.document.type" in self.env
                 and move_form.l10n_latam_use_documents
