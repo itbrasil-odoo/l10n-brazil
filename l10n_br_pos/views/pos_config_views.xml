@@ -13,6 +13,7 @@
                     options="{'no_create': True}"
                 />
                 <field name="out_pos_document_type_id" options="{'no_create': True}" />
+                <field name="l10n_br_invoice_fiscal_document" />
             </xpath>
         </field>
     </record>

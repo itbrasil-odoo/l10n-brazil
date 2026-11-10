@@ -442,3 +442,164 @@ class TestPosOrderFiscalState(TestPosOrderInvoice):
             anexo,
             "A venda não expõe o arquivo da nota autorizada.",
         )
+
+
+@tagged("post_install", "-at_install")
+class TestPosOrderFiscalDocumentChoice(TestPosOrderInvoice):
+    """Cada venda escolhe se a fatura leva documento fiscal."""
+
+    def _invoice(self, order):
+        order.with_context(generate_pdf=False).action_pos_order_invoice()
+        return order.account_move
+
+    def test_sale_without_fiscal_document_invoices_without_document(self):
+        order = self._sell(to_invoice=False)
+        order.l10n_br_issue_fiscal_document = False
+        move = self._invoice(order)
+
+        self.assertFalse(move.document_type_id)
+        self.assertFalse(move.fiscal_operation_id)
+        self.assertFalse(move.invoice_line_ids.cfop_id)
+
+    def test_new_sale_takes_the_pos_default(self):
+        self.config.l10n_br_invoice_fiscal_document = False
+        order = self._sell(to_invoice=False)
+
+        self.assertFalse(order.l10n_br_issue_fiscal_document)
+
+    def test_new_sale_defaults_to_fiscal_document(self):
+        order = self._sell(to_invoice=False)
+
+        self.assertTrue(order.l10n_br_issue_fiscal_document)
+
+    def test_emit_implies_fiscal_document(self):
+        order = self._sell(to_invoice=False)
+        order.l10n_br_issue_fiscal_document = False
+        order.l10n_br_emit_document = True
+        self.env.user.groups_id = [
+            Command.link(self.env.ref("l10n_br_pos.group_pos_emit_document").id)
+        ]
+        with patch.object(
+            type(self.env["account.move"]),
+            "action_document_send",
+            lambda records: None,
+        ):
+            move = self._invoice(order)
+
+        self.assertTrue(move.document_type_id)
+        self.assertTrue(order.l10n_br_issue_fiscal_document)
+
+    def test_order_default_is_fiscal_document(self):
+        """Sem escolha nem configuração a venda leva documento fiscal.
+
+        É o valor que as vendas existentes recebem na atualização do módulo:
+        a coluna nova é preenchida com o default do campo.
+        """
+        defaults = self.env["pos.order"].default_get(["l10n_br_issue_fiscal_document"])
+        self.assertTrue(defaults["l10n_br_issue_fiscal_document"])
+
+    def _sync_ui_order(self, price=100.0):
+        """Uma venda faturada como o caixa a envia em ``sync_from_ui``.
+
+        O front end carrega todos os campos de ``pos.order`` e serializa cada
+        campo armazenado, trocando ``undefined`` por ``False``: a venda nova
+        chega com ``l10n_br_issue_fiscal_document`` = False, sem que o caixa
+        tenha escolhido nada.
+
+        Confirmar o documento dispara a validação da NF-e, que depende do
+        cadastro fiscal da empresa e dos módulos de EDI instalados no banco —
+        nada disso está sob teste. O que se mede é a venda e a fatura levarem
+        ou não o documento.
+        """
+        self.patch(
+            type(self.env["l10n_br_fiscal.document"]),
+            "action_document_confirm",
+            lambda documents: True,
+        )
+        session = self.env["pos.session"].create(
+            {"config_id": self.config.id, "user_id": self.env.uid}
+        )
+        session.action_pos_session_open()
+        uuid = "00000000-0000-4000-8000-%012d" % session.id
+        order_ids = self.env["pos.order"].sync_from_ui(
+            [
+                {
+                    "uuid": uuid,
+                    "name": f"Order {uuid}",
+                    "session_id": session.id,
+                    "company_id": self.company.id,
+                    "partner_id": self.partner.id,
+                    "user_id": self.env.uid,
+                    "pricelist_id": self.config.pricelist_id.id,
+                    "date_order": "2026-11-10 12:00:00",
+                    "sequence_number": 1,
+                    "last_order_preparation_change": "{}",
+                    "to_invoice": True,
+                    "l10n_br_emit_document": False,
+                    "l10n_br_issue_fiscal_document": False,
+                    "amount_tax": 0.0,
+                    "amount_total": price,
+                    "amount_paid": price,
+                    "amount_return": 0.0,
+                    "lines": [
+                        Command.create(
+                            {
+                                "product_id": self.product.id,
+                                "qty": 1,
+                                "price_unit": price,
+                                "price_subtotal": price,
+                                "price_subtotal_incl": price,
+                                "tax_ids": [Command.clear()],
+                                "pack_lot_ids": [],
+                            }
+                        )
+                    ],
+                    "payment_ids": [
+                        Command.create(
+                            {
+                                "amount": price,
+                                "name": "2026-11-10 12:00:00",
+                                "payment_method_id": self.payment_method.id,
+                            }
+                        )
+                    ],
+                }
+            ]
+        )["pos.order"]
+        return self.env["pos.order"].browse(order_ids[0]["id"])
+
+    def test_ui_sale_takes_the_pos_default_with_document(self):
+        """A venda do caixa segue a configuração, não o False do front end."""
+        order = self._sync_ui_order()
+
+        self.assertTrue(order.l10n_br_issue_fiscal_document)
+        self.assertTrue(order.account_move.document_type_id)
+        self.assertTrue(order.account_move.fiscal_operation_id)
+
+    def test_ui_sale_takes_the_pos_default_without_document(self):
+        self.config.l10n_br_invoice_fiscal_document = False
+        order = self._sync_ui_order()
+
+        self.assertFalse(order.l10n_br_issue_fiscal_document)
+        self.assertTrue(order.account_move)
+        self.assertFalse(order.account_move.document_type_id)
+
+    def test_backend_choice_is_kept(self):
+        """Quem grava a escolha pelo servidor continua sendo atendido."""
+        session = self.env["pos.session"].create(
+            {"config_id": self.config.id, "user_id": self.env.uid}
+        )
+        session.action_pos_session_open()
+        order = self.env["pos.order"].create(
+            {
+                "session_id": session.id,
+                "company_id": self.company.id,
+                "l10n_br_issue_fiscal_document": False,
+                "amount_tax": 0.0,
+                "amount_total": 0.0,
+                "amount_paid": 0.0,
+                "amount_return": 0.0,
+            }
+        )
+
+        self.assertFalse(order.l10n_br_issue_fiscal_document)

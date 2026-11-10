@@ -54,6 +54,63 @@ class PosOrder(models.Model):
         "Sem isto o documento é montado e fica pendente de envio.",
     )
 
+    l10n_br_issue_fiscal_document = fields.Boolean(
+        string="Com documento fiscal",
+        copy=False,
+        # Sem default, a atualização do módulo gravaria False nas vendas
+        # existentes e elas seriam faturadas sem documento fiscal.
+        default=True,
+        help="Faz a fatura desta venda carregar operação fiscal e documento "
+        "fiscal. Novas vendas herdam o padrão do ponto de venda.",
+    )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Vendas sem a escolha explícita herdam o padrão do ponto de venda.
+
+        O caixa não envia o campo, então é aqui que a venda dele o recebe.
+        """
+        sessions = self.env["pos.session"].browse(
+            [
+                vals["session_id"]
+                for vals in vals_list
+                if vals.get("session_id")
+                and "l10n_br_issue_fiscal_document" not in vals
+            ]
+        )
+        defaults = {
+            session.id: session.config_id.l10n_br_invoice_fiscal_document
+            for session in sessions
+        }
+        for vals in vals_list:
+            if "l10n_br_issue_fiscal_document" not in vals and vals.get("session_id"):
+                vals["l10n_br_issue_fiscal_document"] = defaults[vals["session_id"]]
+        return super().create(vals_list)
+
+    @api.model
+    def _process_order(self, order, existing_order):
+        """A venda do caixa nunca escolhe se leva documento fiscal.
+
+        O front end carrega todos os campos de ``pos.order`` e serializa cada
+        campo armazenado, trocando ``undefined`` por ``False``: sem isto, toda
+        venda nova chegaria com ``l10n_br_issue_fiscal_document`` = False e
+        seria faturada sem documento fiscal, qualquer que fosse o padrão do
+        ponto de venda. Tirando a chave, ``create`` aplica o padrão e a venda
+        existente mantém o que tem. A escolha por venda é do financeiro, no
+        servidor.
+        """
+        order.pop("l10n_br_issue_fiscal_document", None)
+        return super()._process_order(order, existing_order)
+
+    def _l10n_br_with_fiscal_document(self):
+        """A venda leva documento fiscal na fatura?
+
+        Marcar para emitir implica documento fiscal: não há o que transmitir
+        sem ele.
+        """
+        self.ensure_one()
+        return self.l10n_br_issue_fiscal_document or self.l10n_br_emit_document
+
     @api.model
     def _get_fiscal_lines_field_name(self):
         """O ponto de venda chama de ``lines`` o que o mixin espera em
@@ -90,6 +147,10 @@ class PosOrder(models.Model):
         da apuração sem que ninguém seja avisado.
         """
         vals = super()._prepare_invoice_vals()
+        if not self._l10n_br_with_fiscal_document():
+            return vals
+        if not self.l10n_br_issue_fiscal_document:
+            self.l10n_br_issue_fiscal_document = True
         # Elevado porque a determinação lê o cadastro fiscal (operação, tipo e
         # série do documento), que quem opera o caixa não tem direito de ler.
         # É o mesmo tratamento que o ponto de venda dá à criação da fatura.
@@ -120,6 +181,8 @@ class PosOrder(models.Model):
         cobrado no balcão.
         """
         vals = super()._get_invoice_lines_values(line_values, pos_order_line)
+        if not pos_order_line.order_id._l10n_br_with_fiscal_document():
+            return vals
         if not pos_order_line.fiscal_operation_id:
             return vals
         fiscal_vals = pos_order_line._prepare_br_fiscal_dict()
