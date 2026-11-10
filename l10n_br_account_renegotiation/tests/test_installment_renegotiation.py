@@ -28,7 +28,6 @@ class TestInstallmentRenegotiation(TransactionCase):
         cls.account_receivable = cls.env["account.account"].search(
             [
                 ("account_type", "=", "asset_receivable"),
-                ("company_ids", "in", cls.company.id),
             ],
             limit=1,
         )
@@ -37,7 +36,6 @@ class TestInstallmentRenegotiation(TransactionCase):
         cls.account_income = cls.env["account.account"].search(
             [
                 ("account_type", "=", "income"),
-                ("company_ids", "in", cls.company.id),
             ],
             limit=1,
         )
@@ -78,9 +76,6 @@ class TestInstallmentRenegotiation(TransactionCase):
                         0,
                         0,
                         {
-                            # Na 18 o valor "balance" saiu da seleção: sobraram
-                            # "percent" e "fixed". A última parcela passa a levar
-                            # o resto em percentual, para as três fecharem 100%.
                             "value": "percent",
                             "value_amount": 33.34,
                             "nb_days": 90,

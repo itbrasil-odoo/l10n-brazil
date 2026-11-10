@@ -4,10 +4,8 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Odoo Server 18.0+e\n"
+"Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-23 21:38+0000\n"
-"PO-Revision-Date: 2026-08-23 21:38+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -81,19 +79,11 @@ msgstr ""
 
 #. module: l10n_br_sped_base
 #: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_declaration__state__done
-#: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_ecd_0000__state__done
-#: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_ecd_9_0000__state__done
-#: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_efd_icms_ipi_0000__state__done
-#: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_efd_icms_ipi_20_0000__state__done
 msgid "Done"
 msgstr ""
 
 #. module: l10n_br_sped_base
 #: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_declaration__state__draft
-#: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_ecd_0000__state__draft
-#: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_ecd_9_0000__state__draft
-#: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_efd_icms_ipi_0000__state__draft
-#: model:ir.model.fields.selection,name:l10n_br_sped_base.selection__l10n_br_sped_efd_icms_ipi_20_0000__state__draft
 msgid "Draft"
 msgstr ""
 
@@ -141,12 +131,6 @@ msgstr ""
 #. odoo-python
 #: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
 msgid "Flush Registers"
-msgstr ""
-
-#. module: l10n_br_sped_base
-#. odoo-python
-#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
-msgid "Flushed all Registers from Declaration!"
 msgstr ""
 
 #. module: l10n_br_sped_base
@@ -205,14 +189,7 @@ msgstr ""
 
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,help:l10n_br_sped_base.field_l10n_br_sped_declaration__message_has_error
-#: model:ir.model.fields,help:l10n_br_sped_base.field_l10n_br_sped_declaration__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
-msgstr ""
-
-#. module: l10n_br_sped_base
-#. odoo-python
-#: code:addons/l10n_br_sped_base/models/sped_mixin.py:0
-msgid "Imported from file:"
 msgstr ""
 
 #. module: l10n_br_sped_base
@@ -312,17 +289,6 @@ msgid "Pull Registers from Odoo"
 msgstr ""
 
 #. module: l10n_br_sped_base
-#. odoo-python
-#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
-msgid "Pulled from Odoo"
-msgstr ""
-
-#. module: l10n_br_sped_base
-#: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__rating_ids
-msgid "Ratings"
-msgstr ""
-
-#. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__res_id
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_mixin__res_id
 msgid "Record ID"
@@ -343,11 +309,6 @@ msgstr ""
 #. module: l10n_br_sped_base
 #: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__activity_user_id
 msgid "Responsible User"
-msgstr ""
-
-#. module: l10n_br_sped_base
-#: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__message_has_sms_error
-msgid "SMS Delivery error"
 msgstr ""
 
 #. module: l10n_br_sped_base
@@ -421,4 +382,32 @@ msgstr ""
 #. module: l10n_br_sped_base
 #: model:ir.model,name:l10n_br_sped_base.model_l10n_br_sped_mixin
 msgid "base class for all registers"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Flushed all Registers from Declaration!"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_mixin.py:0
+msgid "Imported from file:"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#. odoo-python
+#: code:addons/l10n_br_sped_base/models/sped_declaration.py:0
+msgid "Pulled from Odoo"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__rating_ids
+msgid "Ratings"
+msgstr ""
+
+#. module: l10n_br_sped_base
+#: model:ir.model.fields,field_description:l10n_br_sped_base.field_l10n_br_sped_declaration__message_has_sms_error
+msgid "SMS Delivery error"
 msgstr ""

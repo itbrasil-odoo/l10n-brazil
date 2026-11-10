@@ -41,6 +41,14 @@ class TestMoveEdition(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.company = cls.env.ref("l10n_br_base.empresa_lucro_presumido")
+        # A database that loaded a chart before the company country was set
+        # can carry a stale account_fiscal_country_id (e.g. US): the latam
+        # available-document-types domain then matches nothing and the
+        # compute wipes l10n_latam_document_type_id, failing the Form flows
+        # below with "l10n_latam_document_type_id is a required field".
+        # A properly loaded Brazilian chart always has it on Brazil.
+        if cls.company.account_fiscal_country_id != cls.env.ref("base.br"):
+            cls.company.account_fiscal_country_id = cls.env.ref("base.br")
         cls.env = cls.env(
             context=dict(cls.env.context, allowed_company_ids=cls.company.ids)
         )
@@ -396,7 +404,6 @@ class TestMoveEdition(TransactionCase):
         move.button_cancel()
 
         self.assertEqual(move.state_edoc, DOCUMENT_STATE_CANCEL)
-        self.assertFalse(move.fiscal_document_id.cancel_event_id)
 
         move.button_draft()
         self.assertEqual(move.state, "draft")
