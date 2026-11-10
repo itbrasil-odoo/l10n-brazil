@@ -27,3 +27,11 @@ class PosConfig(models.Model):
         "balcão de mercadoria, NFS-e num de serviço. Vazio usa o documento "
         "padrão da empresa.",
     )
+
+    l10n_br_invoice_fiscal_document = fields.Boolean(
+        string="Fatura com documento fiscal",
+        default=True,
+        help="Padrão das vendas deste ponto de venda: a fatura gerada por "
+        "elas carrega operação fiscal e documento fiscal. Desmarcado, a venda "
+        "nova nasce sem documento fiscal; cada venda pode mudar isso.",
+    )
