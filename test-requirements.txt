@@ -1,0 +1,2 @@
+# account_due_list is not released for 20.0 yet: use the itbrasil-odoo fork, where it is merged
+odoo-addon-account_due_list @ git+https://github.com/itbrasil-odoo/account-payment@20.0#subdirectory=account_due_list
