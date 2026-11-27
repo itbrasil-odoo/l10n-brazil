@@ -153,7 +153,7 @@ class L10nBrZip(models.Model):
             # ex.: Avenida Paulista, 509
             # nesses casos os campos serão separados.
             street_number = False
-            street_split = cep.get("street").split(", ")
+            street_split = (cep.get("street") or "").split(", ")
             street = street_split[0]
             if len(street_split) > 1:
                 street_number = street_split[1]
