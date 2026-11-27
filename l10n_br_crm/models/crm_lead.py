@@ -110,12 +110,15 @@ class Lead(models.Model):
                 result["l10n_br_im_code"] = partner.l10n_br_im_code
                 result["l10n_br_isuf_code"] = partner.l10n_br_isuf_code
             else:
-                result["partner_name"] = parent.name or False
-                result["legal_name"] = parent.legal_name or False
-                result["l10n_br_ie_code"] = parent.l10n_br_ie_code or False
-                result["l10n_br_im_code"] = parent.l10n_br_im_code or False
-                result["l10n_br_isuf_code"] = parent.l10n_br_isuf_code or False
-                result["website"] = parent.website or False
+                # Without a parent company keep what was typed on the Lead,
+                # as the core does.
+                if parent:
+                    result["partner_name"] = parent.name or False
+                    result["legal_name"] = parent.legal_name or False
+                    result["l10n_br_ie_code"] = parent.l10n_br_ie_code or False
+                    result["l10n_br_im_code"] = parent.l10n_br_im_code or False
+                    result["l10n_br_isuf_code"] = parent.l10n_br_isuf_code or False
+                    result["website"] = parent.website or False
                 result["l10n_br_rg_code"] = partner.l10n_br_rg_code
                 result["name_surname"] = partner.legal_name
         self.update(result)
@@ -171,7 +174,9 @@ class Lead(models.Model):
         # A Brazilian company is created from its own CNPJ and company name,
         # never from the free text ``partner_name`` of the Lead: another
         # partner would hold the same CNPJ, which l10n_br_base forbids.
-        values.pop("parent_name", None)
+        # Other Leads keep the core flow (company created from its name).
+        if self._is_br_company():
+            values.pop("parent_name", None)
         # Odoo 20.0 removed the Person/Company switch, the company case is
         # deduced from the CNPJ and the individual case from the CPF (same
         # rule as res.partner._compute_is_company in l10n_br_base). A partner
