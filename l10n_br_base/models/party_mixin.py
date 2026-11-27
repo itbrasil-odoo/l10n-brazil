@@ -238,9 +238,10 @@ class PartyMixin(models.AbstractModel):
         """Whether the user disabled the Brazilian VAT validation.
 
         True when the setting (or the context key) is enabled. Also used to
-        skip the VAT validation core Odoo 20.0 performs itself (see
-        ``res.partner._check_vat``), so that the Brazilian setting keeps
-        allowing legacy/foreign numbers.
+        skip the VAT validation core Odoo 20.0 performs itself on Brazilian
+        partners (see ``res.partner._check_vat``), so that the Brazilian
+        setting keeps allowing legacy numbers. Foreign partners are still
+        validated by the core.
         """
         return bool(
             self.env.context.get("disable_cpf_cnpj_validation")

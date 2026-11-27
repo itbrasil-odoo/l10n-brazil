@@ -49,14 +49,25 @@ class Partner(models.Model):
         help="Is it a Brazilian partner?",
     )
 
-    def copy(self, default=None):
+    def copy_data(self, default=None):
+        vals_list = super().copy_data(default=default)
+        for partner, vals in zip(self, vals_list, strict=True):
+            # CNPJ should be unique.
+            if partner.is_br_partner and "vat" not in (default or {}):
+                vals["vat"] = None
+        return vals_list
+
+    def _get_synced_commercial_values(self):
+        """Never push a Brazilian contact's CPF/CNPJ up to its parent.
+
+        Odoo 20.0 syncs ``vat`` from a contact to its commercial entity
+        (``_fields_sync``, "To UPSTREAM"). In Brazil a contact may hold its own
+        CPF under a company with a CNPJ, so the parent's CNPJ must stay.
+        """
+        values = super()._get_synced_commercial_values()
         if self.is_br_partner:
-            if default is None:
-                default = {}
-            if "vat" not in default:
-                # CNPJ should be unique:
-                default["vat"] = None
-        return super().copy(default)
+            values.pop("vat", None)
+        return values
 
     def _commercial_sync_from_company(self):
         """Overridden to avoid copying the CNPJ (vat field) to child partners.
@@ -137,21 +148,25 @@ class Partner(models.Model):
             if matches:
                 if cnpj_cpf.validar_cnpj(record.vat):
                     if allow_cnpj_multi_ie:
-                        for partner in matches:
-                            if (
-                                partner.l10n_br_ie_code == record.l10n_br_ie_code
-                                and record.l10n_br_ie_code
-                            ):
-                                raise ValidationError(
-                                    self.env._(
-                                        "There is already a partner %(name)s "
-                                        "(ID %(partner_id)s) with this "
-                                        "Estadual Inscription %(incr_est)s!",
-                                        name=partner.name,
-                                        partner_id=partner.id,
-                                        incr_est=partner.l10n_br_ie_code,
-                                    )
+                        # Look for the same IE among all the partners sharing
+                        # this CNPJ, not only the first one found.
+                        same_ie = record.l10n_br_ie_code and record.env[
+                            "res.partner"
+                        ].search(
+                            domain + [("l10n_br_ie_code", "=", record.l10n_br_ie_code)],
+                            limit=1,
+                        )
+                        if same_ie:
+                            raise ValidationError(
+                                self.env._(
+                                    "There is already a partner %(name)s "
+                                    "(ID %(partner_id)s) with this "
+                                    "Estadual Inscription %(incr_est)s!",
+                                    name=same_ie.name,
+                                    partner_id=same_ie.id,
+                                    incr_est=same_ie.l10n_br_ie_code,
                                 )
+                            )
                     else:
                         raise ValidationError(
                             self.env._(
@@ -225,7 +240,8 @@ class Partner(models.Model):
                         ("state_id", "=", l10n_br_ie_code_line.state_id.id),
                         ("l10n_br_ie_code", "=", l10n_br_ie_code_line.l10n_br_ie_code),
                         ("id", "!=", record.id),
-                    ]
+                    ],
+                    limit=1,
                 )
                 if duplicate_ie:
                     raise ValidationError(
@@ -268,7 +284,10 @@ class Partner(models.Model):
         every individual holding a CPF would otherwise be flagged as a company.
         """
         cpf_partners = self.filtered(
-            lambda partner: cnpj_cpf.validar_cpf(partner.vat or "")
+            lambda partner: (
+                partner.country_id.code in (False, "BR")
+                and cnpj_cpf.validar_cpf(partner.vat or "")
+            )
         )
         for partner in cpf_partners:
             partner.is_company = False
@@ -281,9 +300,16 @@ class Partner(models.Model):
         accepts both the CPF and the CNPJ), so the l10n_br_base setting that
         disables the validation must also bypass the core check.
         """
-        if self._l10n_br_disable_vat_validation():
-            return
-        return super()._check_vat(validation=validation)
+        if not self._l10n_br_disable_vat_validation():
+            return super()._check_vat(validation=validation)
+        # The Brazilian setting only bypasses the check of Brazilian partners.
+        foreign = self.filtered(
+            lambda partner: (
+                partner.commercial_partner_id.country_id.code not in (False, "BR")
+            )
+        )
+        if foreign:
+            return super(Partner, foreign)._check_vat(validation=validation)
 
     def _is_br_partner(self):
         """Check if is a Brazilian Partner."""
